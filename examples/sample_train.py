@@ -239,7 +239,7 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
             image_shape=self.hparams.image_shape,
             code_size=self.hparams.bit_size,
         )
-        self.randomizer = VirtualRandomizer(channel_shuffle=True, channel_shuffle_p=1.0)
+        self.randomizer = VirtualRandomizer()
 
         # Losses
         self.weight_code = self.hparams.weight_code
@@ -256,9 +256,12 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
         code = batch["x"]
         B, _ = code.shape
 
-        angles = torch.randint(0, 4, [B]).to(code.device)
+        # angles = torch.randint(0, 4, [B]).to(code.device)
+        angles = torch.Tensor([self.global_step % 4]).repeat(B).to(code.device).long()
+        # print("BATCH IDX", batch_idx, self.global_step)
 
         imgs = self.model.generate(code, angles)
+        # if np.random.uniform(0, 1) > 0.5:
         imgs = self.randomizer(imgs)
         out = self.model.encode(imgs)
 
@@ -392,21 +395,21 @@ def train(output_folder: str):
 
     output_folder = "/tmp/leakers"
     experiment_name = "leaker_alpha"
-    epochs = 1000
+    epochs = 8000
     checkpoint = ""
     device = "cuda"
 
-    seed = 211285
-    torch.manual_seed(seed)
-    if device == "cuda":
-        torch.cuda.manual_seed(seed)
+    # seed = 211285
+    # torch.manual_seed(seed)
+    # if device == "cuda":
+    #     torch.cuda.manual_seed(seed)
 
     hparams = {
-        "lr": 0.0001,
+        "lr": 0.00003,
         "image_shape": [3, 64, 64],
         "bit_size": 6,
         "weight_code": 1.0,
-        "weight_rot": 0.001,
+        "weight_rot": 0.1,
     }
     batch_size = hparams["bit_size"] ** 2
 
@@ -423,7 +426,7 @@ def train(output_folder: str):
         logger=logger,
         log_every_n_steps=10,
         default_root_dir=output_folder,
-        check_val_every_n_epoch=10,
+        check_val_every_n_epoch=100,
         resume_from_checkpoint=checkpoint if len(checkpoint) > 0 else None
         # callbacks=[es]
     )
@@ -500,6 +503,8 @@ def export(checkpoint: str, output_folder: str):
         if not ret_val:
             break
 
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
         detections = detector.build_detections(img, size=64)
 
         for detection in detections:
@@ -528,7 +533,7 @@ def export(checkpoint: str, output_folder: str):
                     2,
                 )
 
-        cv2.imshow("cam", img)
+        cv2.imshow("cam", cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
         if cv2.waitKey(1) == 27:
             break

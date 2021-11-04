@@ -12,6 +12,13 @@ class VirtualRandomizer(torch.nn.Module):
         image_shape = np.array(kwargs.get("image_shape", [3, 64, 64]))
         image_size = image_shape[1:3]
 
+        # Color Jitter
+        color_jitter = kwargs.get("color_jitter", True)
+        color_jitter_brightness = kwargs.get("color_jitter_brightness", 0.5)
+        color_jitter_contrast = kwargs.get("color_jitter_contrast", 0.5)
+        color_jitter_saturation = kwargs.get("color_jitter_saturation", 0.5)
+        color_jitter_p = kwargs.get("color_jitter_p", 0.5)
+
         # Random Crop
         random_crop_percentage = kwargs.get("random_crop_percentage", -1)
         random_crop = random_crop_percentage > 0 and random_crop_percentage <= 1.0
@@ -19,7 +26,7 @@ class VirtualRandomizer(torch.nn.Module):
 
         # Channel Shuffle
         channel_shuffle = kwargs.get("channel_shuffle", False)
-        channel_shuffle_p = kwargs.get("channel_shuffle_p", 1.0)
+        channel_shuffle_p = kwargs.get("channel_shuffle_p", 0.5)
 
         # Gaussian Noise
         gaussian_noise = kwargs.get("gaussian_noise", True)
@@ -36,7 +43,7 @@ class VirtualRandomizer(torch.nn.Module):
 
         # Box Blur
         box_blur = kwargs.get("box_blur", True)
-        box_blur_size = kwargs.get("box_blur_size", [15, 15])
+        box_blur_size = kwargs.get("box_blur_size", [35, 35])
         box_blur_p = kwargs.get("box_blur_p", 0.5)
 
         # Random Erasing
@@ -46,6 +53,16 @@ class VirtualRandomizer(torch.nn.Module):
         random_erasing_p = kwargs.get("random_erasing_p", 0.5)
 
         layers = torch.nn.Sequential(
+            # ----------------------------
+            # Color Jitter
+            K.ColorJitter(
+                brightness=color_jitter_brightness,
+                contrast=color_jitter_contrast,
+                saturation=color_jitter_saturation,
+                p=color_jitter_p,
+            )
+            if color_jitter
+            else Identity(),
             # ----------------------------
             # Random Crop
             K.RandomCrop(random_crop_size, p=1.0) if random_crop else Identity(),

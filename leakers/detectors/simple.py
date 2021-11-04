@@ -44,8 +44,8 @@ class SimpleLeakerDetector(object):
         code_idx = self.dataset.words_to_indices(code.detach().cpu().numpy())
         rot = out["rot_classes"].detach().cpu().numpy()
 
-        # if np.unique(code_idx).size == 1:
-        #     return None
+        if np.unique(code_idx).size != 1:
+            return None
 
         if 0 not in rot:
             return None
@@ -55,8 +55,8 @@ class SimpleLeakerDetector(object):
             rot_unroll = np.roll(rot_unroll, 1)
             print(rot_unroll)
 
-        # if not np.array_equal(rot_unroll, np.array([0, 1, 2, 3])):
-        #     return None
+        if not np.array_equal(rot_unroll, np.array([0, 1, 2, 3])):
+            return None
 
         return {"code": code_idx[0], "rot": rot[0]}
 
