@@ -1,8 +1,9 @@
-from typing import Optional, Sequence, Tuple
-from warnings import filters
+from typing import Dict, Optional, Tuple
 import torch
 import numpy as np
 from torch.nn.modules.linear import Identity
+from einops.layers.torch import Rearrange
+from leakers.nn.modules.base import LeakerModule
 
 
 class ElasticEncoder(torch.nn.Module):
@@ -77,23 +78,13 @@ class ElasticEncoder(torch.nn.Module):
         return self.layers(x)
 
 
-class UnFlatten(torch.nn.Module):
-    def __init__(self, shape: Sequence[int]):
-        super(UnFlatten, self).__init__()
-        self.shape = shape
-        assert len(self.shape) == 3, "UnFlatten: needs shape like [C,H,W]"
-
-    def forward(self, x):
-        return x.view(x.size(0), self.shape[0], self.shape[1], self.shape[2])
-
-
 class ElasticDecoder(torch.nn.Module):
     def __init__(
         self,
         output_shape: Tuple[int, int, int],
         latent_size: int = 32,
         n_layers: int = 4,
-        cin: int = 256,
+        cin: int = 32,
         k: int = 3,
         act_middle: str = "torch.nn.ReLU",
         act_last: str = "torch.nn.Sigmoid",
@@ -112,12 +103,13 @@ class ElasticDecoder(torch.nn.Module):
         layers = []
 
         # Initial Linear layer on reshaped features
-        initial_size = cin * fh * fw
+        cout = cin * (2 ** (n_layers - 1))
+        initial_size = cout * fh * fw
 
         layers.append(torch.nn.Linear(latent_size, initial_size))
-        layers.append(UnFlatten([cin, fh, fw]))
+        layers.append(Rearrange("b (c h w) -> b c h w", c=cout, h=fh, w=fw))
 
-        filters = [cin // (2 ** i) for i in range(n_layers + 1)] + [
+        filters = [cout // (2 ** i) for i in range(n_layers + 1)] + [
             self._output_channels
         ]
 
@@ -164,16 +156,6 @@ class ElasticDecoder(torch.nn.Module):
         layers = [x for x in layers if not isinstance(x, Identity)]
         return torch.nn.Sequential(*layers)
 
-    # def _build_last_block(self, cin: int, cout: int, k: int = 3):
-    #     pad = int((k - 1) / 2)
-    #     return torch.nn.Conv2d(
-    #         cin,
-    #         cout,
-    #         kernel_size=k,
-    #         stride=1,
-    #         padding=pad,
-    #     )
-
     def _build_last_block(
         self,
         cin: int,
@@ -193,3 +175,62 @@ class ElasticDecoder(torch.nn.Module):
 
     def forward(self, e):
         return self.layers(e)
+
+
+class ElasticCoder(LeakerModule):
+    def __init__(
+        self,
+        image_shape: Tuple[int, int, int],
+        code_size: int = 32,
+        cin: int = 32,
+        n_layers: int = 4,
+        k: int = 3,
+        bn: bool = False,
+        act_middle: str = "torch.nn.ReLU",
+        act_latent: str = None,  # "torch.nn.Sigmoid",
+        act_last: str = "torch.nn.Sigmoid",
+    ) -> None:
+        super().__init__()
+
+        self._code_size = code_size
+
+        self.encoder = ElasticEncoder(
+            input_shape=image_shape,
+            latent_size=code_size + 4,
+            n_layers=n_layers,
+            cin=cin,
+            k=k,
+            act_middle=act_middle,
+            act_last=act_latent,
+        )
+
+        self.decoder = ElasticDecoder(
+            output_shape=image_shape,
+            latent_size=code_size,
+            n_layers=n_layers,
+            cin=cin,
+            act_middle=act_middle,
+            act_last=act_last,
+        )
+
+    def generate(
+        self, code: torch.Tensor, angle_classes: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        image = self.decoder(code)
+        image_rot = self._rotate(image, k=angle_classes)
+        return image_rot
+
+    def encode(self, images: torch.Tensor) -> Dict[str, torch.Tensor]:
+        z = self.encoder(images)
+        code = z[:, : self._code_size]
+        rot_logits = z[:, self._code_size : self._code_size + 4]
+        rot_classes = torch.argmax(rot_logits, dim=1)
+        return {"code": code, "rot_logits": rot_logits, "rot_classes": rot_classes}
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        print("X", x.shape)
+        gen = self.generate(x)
+        print("G", gen.shape)
+        code = self.encode(gen)["code"]
+        print("C", code.shape)
+        return code
