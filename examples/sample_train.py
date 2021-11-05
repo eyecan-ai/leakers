@@ -541,3 +541,6 @@ def export(checkpoint: str, output_folder: str):
 
 if __name__ == "__main__":
     cli()
+
+
+# shutdown computer now

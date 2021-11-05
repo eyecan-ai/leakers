@@ -1,9 +1,27 @@
+from abc import abstractmethod
 import numpy as np
 import math
 from scipy.spatial import KDTree
 
 
-class BinaryAlphabetDataset:
+class AlphabetDataset:
+    @classmethod
+    def width_from_size(cls, size):
+        return int(np.log2(size))
+
+    @abstractmethod
+    def words_to_indices(self, words: np.ndarray) -> np.ndarray:
+        """Transform plain words [B,bit_size] into corresponding alphabet word number [B]
+
+        :param words: input words [B, bit_size]
+        :type words: np.ndarray
+        :return: output alphabet numbers [B]
+        :rtype: np.ndarray
+        """
+        pass
+
+
+class BinaryAlphabetDataset(AlphabetDataset):
     def __init__(self, bit_size: int = 4, negative_range: bool = True):
 
         self._width = bit_size  # AlphabetDataset.width_from_size(self._size)
@@ -17,10 +35,6 @@ class BinaryAlphabetDataset:
             data.append(sample["x"])
         data = np.array(data)
         self._kdtree = KDTree(data=data)
-
-    @classmethod
-    def width_from_size(cls, size):
-        return int(np.log2(size))
 
     def _binary_repr(self, idx):
         binary_string = np.binary_repr(idx, width=self._width)
@@ -39,13 +53,7 @@ class BinaryAlphabetDataset:
         return {"x": np.array(self._binary_repr(idx)).astype(np.float32), "y": idx}
 
     def words_to_indices(self, words: np.ndarray) -> np.ndarray:
-        """Transform plain words [B,bit_size] into corresponding alphabet number [B]
 
-        :param words: input words [B, bit_size]
-        :type words: np.ndarray
-        :return: output alphabet numbers [B]
-        :rtype: np.ndarray
-        """
         if self._kdtree is None:
             self._build_kdtree()
 
