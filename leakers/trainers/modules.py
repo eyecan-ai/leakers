@@ -1,4 +1,5 @@
 from leakers.datasets.factory import AlphabetDatasetFactory
+from leakers.nn.modules.base import LeakerModule
 from leakers.nn.modules.factory import LeakerModuleFactory, RandomizersFactory
 from leakers.trainers.utils import ImageLogger, PipelineUtils, TensorUtils
 import torch
@@ -12,7 +13,7 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
         self.save_hyperparameters()
 
         # Coder Model
-        self.model = LeakerModuleFactory.create(self.hparams.coder)
+        self.model: LeakerModule = LeakerModuleFactory.create(self.hparams.coder)
 
         # Randomizer Model
         self.randomizer = RandomizersFactory.create(self.hparams.randomizer)

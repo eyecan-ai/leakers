@@ -1,20 +1,23 @@
+from leakers.datasets.datamodules import GenericAlphabetDatamodule
 from leakers.trainers.modules import LeakersTrainingModule
+from leakers.datasets.factory import AlphabetDatasetFactory
+import pytorch_lightning as pl
 
 
 class TestLeakersTrainingModule:
     def test_creation(self):
 
-        code_size = 8
+        code_size = 4
         hparams = {
             "coder": {
                 "type": "elastic",
                 "params": {
                     "image_shape": [3, 64, 64],
-                    "code_size": 8,
+                    "code_size": code_size,
                     "cin": 32,
                     "n_layers": 4,
                     "k": 3,
-                    "bn": False,
+                    "bn": True,
                     "act_middle": "torch.nn.ReLU",
                     "act_latent": None,
                     "act_last": "torch.nn.Sigmoid",
@@ -41,5 +44,18 @@ class TestLeakersTrainingModule:
         }
 
         module = LeakersTrainingModule(**hparams)
+        dataset = AlphabetDatasetFactory.create(hparams["dataset"])
 
-        print(module.proto_dataset)
+        datamodule = GenericAlphabetDatamodule(
+            dataset=dataset, batch_size=2 ** code_size
+        )
+
+        trainer = pl.Trainer(
+            gpus=0,
+            max_epochs=1,
+            log_every_n_steps=10,
+            default_root_dir="/tmp/",
+            check_val_every_n_epoch=100,
+        )
+
+        trainer.fit(module, datamodule)

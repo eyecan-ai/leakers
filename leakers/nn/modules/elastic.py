@@ -53,6 +53,22 @@ class ElasticEncoder(torch.nn.Module):
         layers = [x for x in layers if not isinstance(x, Identity)]
         self.layers = torch.nn.Sequential(*layers)
 
+        self.apply(self.initialize_weights)
+
+    def initialize_weights(self, m):
+        if isinstance(m, torch.nn.Conv2d):
+            torch.nn.init.xavier_uniform_(
+                m.weight.data, gain=torch.nn.init.calculate_gain("relu")
+            )
+            if m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, torch.nn.BatchNorm2d):
+            torch.nn.init.constant_(m.weight.data, 1)
+            torch.nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, torch.nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight.data)
+            torch.nn.init.constant_(m.bias.data, 0)
+
     def _build_basic_block(
         self,
         cin: int,
@@ -202,6 +218,7 @@ class ElasticCoder(LeakerModule):
             k=k,
             act_middle=act_middle,
             act_last=act_latent,
+            bn=bn,
         )
 
         self.decoder = ElasticDecoder(
@@ -211,6 +228,7 @@ class ElasticCoder(LeakerModule):
             cin=cin,
             act_middle=act_middle,
             act_last=act_last,
+            bn=bn,
         )
 
     def generate(
@@ -228,9 +246,6 @@ class ElasticCoder(LeakerModule):
         return {"code": code, "rot_logits": rot_logits, "rot_classes": rot_classes}
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        print("X", x.shape)
         gen = self.generate(x)
-        print("G", gen.shape)
         code = self.encode(gen)["code"]
-        print("C", code.shape)
         return code
