@@ -121,6 +121,21 @@ class LeakersDetector(object):
         self.eps_curve = 0.01
         self.leaker_size = 64
 
+    def rectangle_info(self, points):
+        ## TODO: TEMP DEBUG To detect Rectangle ratio?
+
+        c0 = points[0, :]
+        c1 = points[1, :]
+        c2 = points[2, :]
+        c3 = points[3, :]
+
+        d0 = np.linalg.norm(c0 - c1)
+        d1 = np.linalg.norm(c1 - c2)
+        d2 = np.linalg.norm(c2 - c3)
+        d3 = np.linalg.norm(c3 - c0)
+        ratios = [d0 / d1, d0 / d2, d0 / d3]
+        print("Info, RATIOS, ", ratios)
+
     def detect(self, image: np.ndarray) -> Sequence[Dict]:
         """Detect leakers from image
 
@@ -141,6 +156,7 @@ class LeakersDetector(object):
                 code, rot = output["code"], output["rot"]
                 points = rectangle.reshape((-1, 2))
                 points = np.roll(points, rot, axis=0)
+                self.rectangle_info(points)
                 detection = {"code": code, "points": points, "image": leaker, "M": M}
                 leakers_detections.append(detection)
         return leakers_detections
