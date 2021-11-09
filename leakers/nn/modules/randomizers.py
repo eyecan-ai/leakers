@@ -5,6 +5,8 @@ from torch.nn.modules.linear import Identity
 
 
 class VirtualRandomizer(torch.nn.Module):
+    EPS = 1e-10
+
     def __init__(self, **kwargs) -> None:
         super().__init__()
 
@@ -109,4 +111,5 @@ class VirtualRandomizer(torch.nn.Module):
         self._layers = torch.nn.Sequential(*layers)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.clamp(x, 0.0 + self.EPS, 1.0 - self.EPS)  # Nan if overflow!
         return self._layers(x)

@@ -5,6 +5,7 @@ import pytorch_lightning as pl
 import pytorch_lightning.loggers as pl_loggers
 import click
 from leakers.trainers.modules import LeakersTrainingModule
+import torch
 
 
 @click.group()
@@ -69,6 +70,7 @@ def train(output_folder: str):
     module = LeakersTrainingModule(**hparams)
 
     logger = pl_loggers.TensorBoardLogger(output_folder, name=experiment_name)
+    torch.autograd.set_detect_anomaly(True)
     trainer = pl.Trainer(
         gpus=0,
         max_epochs=epochs,

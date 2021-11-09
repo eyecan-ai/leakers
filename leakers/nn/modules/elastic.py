@@ -6,6 +6,21 @@ from einops.layers.torch import Rearrange
 from leakers.nn.modules.base import LeakerModule
 
 
+def elastic_initialize_weights(m):
+    if isinstance(m, torch.nn.Conv2d):
+        torch.nn.init.xavier_uniform_(
+            m.weight.data, gain=torch.nn.init.calculate_gain("relu")
+        )
+        if m.bias is not None:
+            torch.nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, torch.nn.BatchNorm2d):
+        torch.nn.init.constant_(m.weight.data, 1)
+        torch.nn.init.constant_(m.bias.data, 0)
+    elif isinstance(m, torch.nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight.data)
+        torch.nn.init.constant_(m.bias.data, 0)
+
+
 class ElasticEncoder(torch.nn.Module):
     def __init__(
         self,
@@ -53,21 +68,7 @@ class ElasticEncoder(torch.nn.Module):
         layers = [x for x in layers if not isinstance(x, Identity)]
         self.layers = torch.nn.Sequential(*layers)
 
-        self.apply(self.initialize_weights)
-
-    def initialize_weights(self, m):
-        if isinstance(m, torch.nn.Conv2d):
-            torch.nn.init.xavier_uniform_(
-                m.weight.data, gain=torch.nn.init.calculate_gain("relu")
-            )
-            if m.bias is not None:
-                torch.nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, torch.nn.BatchNorm2d):
-            torch.nn.init.constant_(m.weight.data, 1)
-            torch.nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, torch.nn.Linear):
-            torch.nn.init.xavier_uniform_(m.weight.data)
-            torch.nn.init.constant_(m.bias.data, 0)
+        self.apply(elastic_initialize_weights)
 
     def _build_basic_block(
         self,
@@ -144,6 +145,8 @@ class ElasticDecoder(torch.nn.Module):
         layers.append(eval(act_last)() if act_last is not None else Identity())
         self.layers = torch.nn.Sequential(*layers)
 
+        self.apply(elastic_initialize_weights)
+
     def _build_basic_block(
         self,
         cin: int,
@@ -157,8 +160,6 @@ class ElasticDecoder(torch.nn.Module):
         padding = int((k - 1) / 2)
         layers = [
             torch.nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True),
-            torch.nn.BatchNorm2d(cin) if not first_bn and bn else Identity(),
-            eval(act)(),
             torch.nn.Conv2d(
                 cin,
                 cout,
@@ -167,6 +168,15 @@ class ElasticDecoder(torch.nn.Module):
                 padding=padding,
             ),
             torch.nn.BatchNorm2d(cout) if bn else Identity(),
+            eval(act)(),
+            torch.nn.Conv2d(
+                cout,
+                cout,
+                kernel_size=k,
+                stride=1,
+                padding=padding,
+            ),
+            torch.nn.BatchNorm2d(cin) if not first_bn and bn else Identity(),
             eval(act)(),
         ]
         layers = [x for x in layers if not isinstance(x, Identity)]
