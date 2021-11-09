@@ -324,7 +324,7 @@ class LeakersDetector(object):
     def generate_leakers(
         self,
         output_size: int = 128,
-        border: int = 4,
+        border: int = 1,
         padding: int = 16,
         batch_size: int = 1,
     ) -> Sequence[Dict[str, np.ndarray]]:
@@ -332,7 +332,7 @@ class LeakersDetector(object):
 
         :param output_size: desired output size, defaults to 128
         :type output_size: int, optional
-        :param border: black border width, defaults to 4
+        :param border: black border width, defaults to 1
         :type border: int, optional
         :param padding: white padding width, defaults to 16
         :type padding: int, optional

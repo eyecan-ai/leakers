@@ -15,11 +15,11 @@ def cli():
 
 @cli.command("train")
 @click.option("--output_folder", default="/tmp/leakers")
-def train(output_folder: str):
+@click.option("--epochs", default=8000)
+def train(output_folder: str, epochs: int):
 
     output_folder = "/tmp/leakers"
     experiment_name = "leaker_alpha"
-    epochs = 8000
     checkpoint = ""
     device = "cpu"
     code_size = 3
@@ -41,11 +41,8 @@ def train(output_folder: str):
             },
         },
         "randomizer": {
-            "type": "virtual",
-            "params": {
-                "color_jitter": True,
-                "random_erasing": True,
-            },
+            "type": "warping",
+            "params": {"color_jitter": True, "random_erasing": True, "warper": True},
         },
         "dataset": {"type": "binary", "params": {"bit_size": code_size}},
         "losses": {
@@ -55,7 +52,7 @@ def train(output_folder: str):
         },
         "rotations": {"randomize": False},
         "optimizer": {
-            "lr": 0.001,
+            "lr": 0.0001,
         },
     }
 
