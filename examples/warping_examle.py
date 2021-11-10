@@ -13,10 +13,12 @@ import numpy as np
 from leakers.nn.modules.warping import WarpingModule
 import torch.nn.functional as F
 
+from leakers.utils import TransformsUtils
+
 
 def display_image(img):
     if isinstance(img, torch.Tensor):
-        img = img.squeeze(0).permute(1, 2, 0).numpy().astype(np.uint8)
+        img = (img.squeeze(0).permute(1, 2, 0).numpy() * 255).astype(np.uint8)
 
     return img
 
@@ -28,10 +30,15 @@ def test_square3d():
     H, W = 500, 500  # marker_size[0] * 2, marker_size[1] * 2
     mH, mW = marker_size
 
-    random_img = torch.rand(1, 3, 8, 8) * 255.0
-    random_img = F.interpolate(
-        random_img, size=(marker_size[0], marker_size[1]), mode="nearest"
+    x = torch.rand(1, 3, 8, 8)
+    x = F.interpolate(x, size=(marker_size[0], marker_size[1]), mode="nearest")
+    mask = torch.ones_like(x)
+
+    background = imageio.imread(
+        "/home/daniele/Downloads/gettyimages-1124517056-612x612.jpg"
     )
+    background = torch.Tensor(background / 255.0).permute(2, 0, 1).unsqueeze(0)
+    background = F.interpolate(background, size=(H, W), mode="nearest")
 
     # Buffer
     images = []
@@ -40,52 +47,29 @@ def test_square3d():
     K = torch.Tensor(K).unsqueeze(0)
     warper = WarpingModule(camera_matrix=K)
 
-    for radius in [1.0]:
-        for azimuth in [0]:  # range(0, 360, 36):
-            for zenith in [85]:  # range(0, 90, 20):
-                clear_output(True)
+    radius = 1.0
+    azimuth = 45.0
+    zenith = 75.0
+    T_offset = TransformsUtils.translation_transform(0.0, 0.0, 0.0)
+    T = WarpingModule.spherical_marker_transform(radius, azimuth, zenith)
+    T = np.dot(T, T_offset)
 
-                for delta in [0.0]:
-                    T_offset = np.array(
-                        [
-                            [1.0, 0, 0, delta],
-                            [0.0, 1, 0, 0],
-                            [0.0, 0, 1, 0],
-                            [0.0, 0, 0, 1],
-                        ]
-                    )
+    T = torch.Tensor(T).unsqueeze(0)
+    # display_image(random_img)
 
-                    T = WarpingModule.spherical_marker_transform(
-                        radius, azimuth, zenith
-                    )
-                    T = np.dot(T, T_offset)
+    # try:
+    warped_mask = warper.warp_image(
+        mask, transforms=T, canvas_size=[H, W], mode="bilinear"
+    )
+    warped_x = warper.warp_image(x, transforms=T, canvas_size=[H, W], mode="bilinear")
+    unwarped_img = warper.unwarp_image(
+        x, transforms=T, square_size=[mH, mW], mode="bilinear"
+    )
 
-                    T = torch.Tensor(T).unsqueeze(0)
-                    # display_image(random_img)
-
-                    # try:
-                    warped_img = warper.warp_image(
-                        random_img, transforms=T, canvas_size=[H, W]
-                    )
-                    unwarped_img = warper.unwarp_image(
-                        warped_img, transforms=T, square_size=[mH, mW]
-                    )
-
-                    images.append((unwarped_img, (radius, azimuth, zenith)))
-                    # except Exception as e:
-                    #     print("ERROR", e)
-                    #     pass
-
-                    # display_image(warped_img)
-                    # display_image(unwarped_img)
-                    # time.sleep(0.2)
-
-            print(len(images))
-
-    for image, pose in images:
-        print(pose)
-        cv2.imshow("image", display_image(image))
-        cv2.waitKey(0)
+    print(warped_x.shape, background.shape)
+    out = warped_x * warped_mask + background * (1 - warped_mask)
+    cv2.imshow("image", display_image(out))
+    cv2.waitKey(0)
 
 
 test_square3d()

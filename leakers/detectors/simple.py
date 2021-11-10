@@ -36,7 +36,6 @@ class LeakersDetector(object):
         d2 = np.linalg.norm(c2 - c3)
         d3 = np.linalg.norm(c3 - c0)
         ratios = [d0 / d1, d0 / d2, d0 / d3]
-        print("Info, RATIOS, ", ratios)
 
     def detect(self, image: np.ndarray) -> Sequence[Dict]:
         """Detect leakers from image
@@ -66,6 +65,17 @@ class LeakersDetector(object):
     def detect_3d(
         self, image: np.ndarray, marker_size: float, camera_matrix: np.ndarray
     ) -> Sequence[Dict]:
+        """Detect leakers from image with 3D poses
+
+        :param image: target image
+        :type image: np.ndarray
+        :param marker_size: leaker marker size , defaults to 0.1
+        :type marker_size: float
+        :param camera_matrix: camera matrix
+        :type camera_matrix: np.ndarray
+        :return: list of detections with 'pose' item in each detection as [4, 4] matrix
+        :rtype: Sequence[Dict]
+        """
 
         leakers_detections = self.detect(image)
         points = TransformsUtils.square_points_3D(square_size=marker_size)
@@ -83,6 +93,15 @@ class LeakersDetector(object):
         return leakers_detections
 
     def draw_detection(self, output_image: np.ndarray, detection: Dict) -> np.ndarray:
+        """Draw detection on image
+
+        :param output_image: target image
+        :type output_image: np.ndarray
+        :param detection: list of detections
+        :type detection: Dict
+        :return: drawn image
+        :rtype: np.ndarray
+        """
 
         output_image = output_image.copy()
         corner = detection["points"][0, :]
@@ -106,13 +125,29 @@ class LeakersDetector(object):
         detection: Dict,
         camera_matrix: np.ndarray,
         marker_size: float = 0.1,
-    ):
+    ) -> np.ndarray:
+        """Draw 3d detection on image
+
+        :param output_image: input image
+        :type output_image: np.ndarray
+        :param detection: list of detections
+        :type detection: Dict
+        :param camera_matrix: camera matrix
+        :type camera_matrix: np.ndarray
+        :param marker_size: leaker marker size , defaults to 0.1
+        :type marker_size: float, optional
+        :return: drawn image
+        :rtype: np.ndarray
+        """
 
         if "pose" in detection:
             output_image = output_image.copy()
+
+            offset_T = np.eye(4)
+            offset_T[:3, 3] = np.array([0, 0, marker_size * 0.5])
             output_image = AugmentedReality2DUtils.draw_3d_bounding_box(
                 output_image,
-                detection["pose"],
+                np.dot(detection["pose"], offset_T),
                 dist_coeffs=None,
                 camera_matrix=camera_matrix,
                 object_size=[marker_size, marker_size, marker_size],
@@ -150,30 +185,33 @@ class LeakersDetector(object):
                 0
             )
 
+        # predict code / word idx
         out = self.model.encode(x)
         code = out["code"]
         code_idx = self.dataset.words_to_indices(code.detach().cpu().numpy())
         rot = out["rot_classes"].detach().cpu().numpy()
 
+        # discard detections with multiple ID detectd per rotation
         if np.unique(code_idx).size != 1:
             return None
 
+        # discard detection without the 0 rotation detected
         if 0 not in rot:
             return None
 
+        # discard detection with ordered rotations different from [0,1,2,3]
         rot_unroll = rot.copy()
         while rot_unroll[0] != 0:
             rot_unroll = np.roll(rot_unroll, 1)
-
         if not np.array_equal(rot_unroll, np.array([0, 1, 2, 3])):
             return None
 
         return {"code": code_idx[0], "rot": rot[0]}
 
-    def detect_multi_leaker(self, leaker_image: np.ndarray, splits: int = 2):
+    # def detect_multi_leaker(self, leaker_image: np.ndarray, splits: int = 2):
 
-        h, w = leaker_image.shape[:2]
-        sh, sw = h // splits, w // splits
+    #     h, w = leaker_image.shape[:2]
+    #     sh, sw = h // splits, w // splits
 
     def _detect_rectangles(self, input_image: np.ndarray) -> Sequence[np.ndarray]:
         """Detects rectangles in the image.

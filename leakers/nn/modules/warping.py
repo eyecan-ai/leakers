@@ -99,6 +99,7 @@ class WarpingModule(torch.nn.Module):
         source_image: torch.Tensor,
         transforms: torch.Tensor,
         canvas_size: Tuple[int, int],
+        mode: str = "bilinear",
     ) -> torch.Tensor:
         """Warp an image using the perspective transform.
 
@@ -108,6 +109,8 @@ class WarpingModule(torch.nn.Module):
         :type transforms: torch.Tensor
         :param canvas_size: the size of the warp output
         :type canvas_size: Tuple[int, int]
+        :param mode: the mode to use for interpolation
+        :type mode: str
         :return: output warped images [B, C, H, W]
         :rtype: torch.Tensor
         """
@@ -117,7 +120,7 @@ class WarpingModule(torch.nn.Module):
             transforms=transforms, source_image_size=[mH, mW]
         )
         warped_img = kgeometry.warp_perspective(
-            source_image, M, (H, W), align_corners=True
+            source_image, M, (H, W), align_corners=True, mode=mode
         )
         return warped_img
 
@@ -126,6 +129,7 @@ class WarpingModule(torch.nn.Module):
         canvas_image: torch.Tensor,
         transforms: torch.Tensor,
         square_size: Tuple[int, int],
+        mode: str = "bilinear",
     ) -> torch.Tensor:
         """Unwarp an image using the inverse of the perspective transform.
 
@@ -135,6 +139,8 @@ class WarpingModule(torch.nn.Module):
         :type transforms: torch.Tensor
         :param square_size: the size of the unwarp output
         :type square_size: Tuple[int, int]
+        :param mode: the mode to use for interpolation
+        :type mode: str
         :return: uwarped images [B, C, H, W]
         :rtype: torch.Tensor
         """
@@ -144,7 +150,7 @@ class WarpingModule(torch.nn.Module):
             transforms=transforms, source_image_size=[mH, mW]
         )
         unwarped_img = kgeometry.warp_perspective(
-            canvas_image, M_inv, (mH, mW), align_corners=True
+            canvas_image, M_inv, (mH, mW), align_corners=True, mode=mode
         )
         return unwarped_img
 
