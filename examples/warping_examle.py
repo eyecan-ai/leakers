@@ -10,7 +10,7 @@ from IPython.display import HTML
 from IPython.display import Image as IPImage
 import torch
 import numpy as np
-from leakers.nn.modules.warping import WarpingModule, WarpingModuleV2
+from leakers.nn.modules.warping import WarpingModule
 import torch.nn.functional as F
 
 
@@ -38,7 +38,7 @@ def test_square3d():
 
     K = np.array([2000, 0, W / 2.0, 0, 2000, H / 2.0, 0, 0, 1]).reshape((3, 3))
     K = torch.Tensor(K).unsqueeze(0)
-    warper = WarpingModuleV2(camera_matrix=K)
+    warper = WarpingModule(camera_matrix=K)
 
     for radius in [1.0]:
         for azimuth in [0]:  # range(0, 360, 36):
@@ -55,7 +55,7 @@ def test_square3d():
                         ]
                     )
 
-                    T = WarpingModuleV2.spherical_marker_transform(
+                    T = WarpingModule.spherical_marker_transform(
                         radius, azimuth, zenith
                     )
                     T = np.dot(T, T_offset)

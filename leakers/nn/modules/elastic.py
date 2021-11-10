@@ -219,6 +219,7 @@ class ElasticCoder(LeakerModule):
         super().__init__()
 
         self._code_size = code_size
+        self._image_shape = image_shape
 
         self.encoder = ElasticEncoder(
             input_shape=image_shape,
@@ -240,6 +241,9 @@ class ElasticCoder(LeakerModule):
             act_last=act_last,
             bn=bn,
         )
+
+    def image_shape(self) -> Tuple[int, int, int]:
+        return self._image_shape
 
     def generate(
         self, code: torch.Tensor, angle_classes: Optional[torch.Tensor] = None

@@ -10,5 +10,7 @@ class LeakersDetectorsFactory:
         module = LeakersInferenceModuleFactory.create_from_checkpoint(filename, device)
         model: LeakerModule = module.model
         dataset: AlphabetDataset = module.proto_dataset
-        detector = LeakersDetector(model=model, dataset=dataset)
+        detector = LeakersDetector(
+            model=model, dataset=dataset, grayscale=model.image_shape()[0] == 1
+        )
         return detector

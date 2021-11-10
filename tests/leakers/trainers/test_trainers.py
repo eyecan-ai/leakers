@@ -26,7 +26,8 @@ class TestLeakersTrainingModule:
             "randomizer": {
                 "type": "virtual",
                 "params": {
-                    "color_jitter": False,
+                    "warping": True,
+                    "color_jitter": True,
                     "random_erasing": True,
                     "random_erasing_p": 0.1,
                 },

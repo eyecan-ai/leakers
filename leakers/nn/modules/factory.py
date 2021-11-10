@@ -1,5 +1,5 @@
 from leakers.nn.modules.elastic import ElasticCoder
-from leakers.nn.modules.randomizers import VirtualRandomizer, WarpingRandomizer
+from leakers.nn.modules.randomizers import VirtualRandomizer
 
 
 class LeakerModuleFactory:
@@ -16,7 +16,7 @@ class LeakerModuleFactory:
 
 class RandomizersFactory:
 
-    FACTORY_MAP = {"virtual": VirtualRandomizer, "warping": WarpingRandomizer}
+    FACTORY_MAP = {"virtual": VirtualRandomizer}
 
     @classmethod
     def create(cls, cfg: dict):

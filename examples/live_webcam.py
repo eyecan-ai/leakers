@@ -1,4 +1,5 @@
 import cv2
+from leakers.cli.live import draw_axis
 from leakers.detectors.factory import LeakersDetectorsFactory
 import time
 
@@ -8,6 +9,7 @@ import click
 @click.command("live_detection")
 @click.option("--checkpoint", required=True)
 def live_detection(checkpoint: str):
+
     detector = LeakersDetectorsFactory.create_from_checkpoint(filename=checkpoint)
     leakers = detector.generate_leakers(border=2)
 
@@ -25,12 +27,13 @@ def live_detection(checkpoint: str):
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         t1 = time.perf_counter()
-        detections = detector.detect(img)
+        detections = detector.detect_3d(img)
         t2 = time.perf_counter()
         # print(f"Time: {t2 - t1}\t Hz:{1./(t2-t1)}")
 
         for d in detections:
             img = detector.draw_detection(img, d)
+            img = draw_axis(img, d["pose"]["R"], d["pose"]["t"], K)
 
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         cv2.imshow("my webcam", img)

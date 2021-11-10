@@ -65,7 +65,15 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
         loss_rot = self.rot_loss(rot_logit, angles)
         loss = self.weight_code * loss_code + self.weight_rot * loss_rot
 
-        return {"loss": loss, "loss_code": loss_code, "loss_rot": loss_rot}
+        self.log("train/loss", loss.item())
+        self.log("train/loss_rot", loss_rot.item())
+        self.log("train/loss_code", loss_code.item())
+
+        return {
+            "loss": loss,
+            "loss_code": loss_code.detach(),
+            "loss_rot": loss_rot.detach(),
+        }
 
     def validation_step(self, batch, batch_idx):
 

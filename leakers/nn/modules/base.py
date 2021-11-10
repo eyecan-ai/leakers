@@ -8,6 +8,10 @@ class LeakerModule(torch.nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
 
+    @abstractmethod
+    def image_shape(self) -> Tuple[int, int, int]:
+        pass
+
     def _rotate(
         self, image: torch.Tensor, k: Optional[torch.Tensor] = None
     ) -> torch.Tensor:

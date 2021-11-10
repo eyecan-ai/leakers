@@ -24,12 +24,12 @@ def train(output_folder: str, epochs: int):
     device = "cpu"
     code_size = 3
     batch_size = 2 ** code_size
-
+    image_shape = [1, 64, 64]
     hparams = {
         "coder": {
             "type": "elastic",
             "params": {
-                "image_shape": [3, 64, 64],
+                "image_shape": image_shape,
                 "code_size": code_size,
                 "cin": 32,
                 "n_layers": 4,
@@ -41,8 +41,13 @@ def train(output_folder: str, epochs: int):
             },
         },
         "randomizer": {
-            "type": "warping",
-            "params": {"color_jitter": True, "random_erasing": True, "warper": True},
+            "type": "virtual",
+            "params": {
+                "image_shape": image_shape,
+                "color_jitter": True,
+                "random_erasing": True,
+                "warper": True,
+            },
         },
         "dataset": {"type": "binary", "params": {"bit_size": code_size}},
         "losses": {
