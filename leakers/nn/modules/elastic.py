@@ -176,7 +176,7 @@ class ElasticDecoder(torch.nn.Module):
                 stride=1,
                 padding=padding,
             ),
-            torch.nn.BatchNorm2d(cin) if not first_bn and bn else Identity(),
+            torch.nn.BatchNorm2d(cout) if not first_bn and bn else Identity(),
             eval(act)(),
         ]
         layers = [x for x in layers if not isinstance(x, Identity)]
