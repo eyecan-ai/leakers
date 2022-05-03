@@ -9,7 +9,7 @@ import cv2
 @click.option(
     "-s",
     "--source",
-    default="http://192.168.1.12:4747/video",
+    default="http://192.168.1.5:4747/video",
     help="Stream source [OpenCV VideoCapture url].",
 )
 @click.option("--cuda/--cpu", default=False, help="Cuda or CPU Training")

@@ -1,7 +1,49 @@
 from typing import Sequence, Union
-from esurface.geometry.transforms import Transforms3DUtils
 import cv2
 import numpy as np
+from typing import Sequence, Union
+import transforms3d
+import cv2
+import numpy as np
+
+
+class Transforms3DUtils(object):
+    @classmethod
+    def numpy_to_opencv(cls, T):
+        rot = T[:3, :3]
+        tvec = T[:3, 3]
+        rvec, _ = cv2.Rodrigues(rot)
+        return rvec, tvec
+
+    @classmethod
+    def translation(cls, p: Union[np.ndarray, Sequence[float]]):
+        T = np.eye(4)
+        T[:3, 3] = np.array(p).ravel()
+        return T
+
+    @classmethod
+    def rot_x(cls, angle: float):
+        T = np.eye(4)
+        T[:3, :3] = transforms3d.euler.euler2mat(angle, 0.0, 0.0)
+        return T
+
+    @classmethod
+    def rot_y(cls, angle: float):
+        T = np.eye(4)
+        T[:3, :3] = transforms3d.euler.euler2mat(0.0, angle, 0.0)
+        return T
+
+    @classmethod
+    def rot_z(cls, angle: float):
+        T = np.eye(4)
+        T[:3, :3] = transforms3d.euler.euler2mat(0.0, 0.0, angle)
+        return T
+
+    @classmethod
+    def rot_euler(cls, a: float, b: float, c: float):
+        T = np.eye(4)
+        T[:3, :3] = transforms3d.euler.euler2mat(a, b, c)
+        return T
 
 
 class TransformsUtils:
