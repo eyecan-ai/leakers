@@ -193,8 +193,8 @@ class ElasticDecoder(torch.nn.Module):
         pad = int((k - 1) / 2)
         layers = torch.nn.Sequential(
             torch.nn.Conv2d(cin, cout, k, 1, pad),
-            eval(act)(),
-            torch.nn.Conv2d(cout, cout, k, 1, pad),
+            # eval(act)(),
+            # torch.nn.Conv2d(cout, cout, k, 1, pad),
         )
         layers = [x for x in layers if not isinstance(x, Identity)]
         return torch.nn.Sequential(*layers)
