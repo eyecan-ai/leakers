@@ -2,6 +2,8 @@ from pathlib import Path
 import click
 import numpy as np
 import cv2
+import threading
+import time
 
 
 @click.command("live", help="Compile Configuration file")
@@ -36,11 +38,36 @@ def live(
         cv2.imshow(f"L{leaker_id}", cv2.cvtColor(leaker_image, cv2.COLOR_RGB2BGR))
         cv2.waitKey(1)
 
-    cam = cv2.VideoCapture(source)
+    class CamBuffer:
+        def __init__(self, source: str) -> None:
+            self._source = source
+            self._active = True
+            self._last_frame = None
+            self._camera = cv2.VideoCapture(source)
+            self._thread = threading.Thread(target=self.loop, daemon=True)
+            self._thread.start()
+
+        def stop(self):
+            self._active = False
+
+        def frame(self):
+            return self._last_frame
+
+        def loop(self):
+            while self._active:
+                ret_val, img = self._camera.read()
+                self._last_frame = img
+                if not ret_val:
+                    self._active = False
+                time.sleep(0.01)
+
+    cam = CamBuffer(source)
+
     while True:
-        ret_val, img = cam.read()
-        if not ret_val:
-            break
+
+        img = cam.frame()
+        if img is None:
+            continue
 
         H, W = img.shape[:2]
         K = np.array(([500.0, 0, W / 2], [0, 500.0, H / 2], [0, 0, 1])).reshape((3, 3))
@@ -54,4 +81,5 @@ def live(
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         cv2.imshow("live", img)
         if cv2.waitKey(1) == 27:
+            cam.stop()
             break  # esc to quit
