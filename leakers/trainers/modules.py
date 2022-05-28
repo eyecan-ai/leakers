@@ -36,7 +36,7 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
     def training_step(self, batch, batch_idx):
 
         # Extract data
-        code = batch["x"]
+        code = batch["x"].contiguous()
         B, _ = code.shape
 
         # Compute input angles classes

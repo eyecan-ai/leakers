@@ -186,8 +186,8 @@ class WarpingModule(torch.nn.Module):
 
         T = np.eye(4)
         T = np.dot(T, radius_transform)
-        T = np.dot(T, azimuth_transform)
         T = np.dot(T, zenith_transform)
+        T = np.dot(T, azimuth_transform)
         return T
 
     @classmethod

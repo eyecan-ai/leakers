@@ -15,7 +15,7 @@ import click
 @click.option("--channels", default=3, help="Leaker image channels [1 or 3]")
 @click.option("-o", "--output_folder", default="/tmp/leakers", help="Output log folder")
 @click.option("-e", "--epochs", default=5000, help="Number of epochs")
-@click.option("--cuda/--cpu", default=False, help="Cuda or CPU Training")
+@click.option("--device", default="cpu", help="Device")
 def generate(
     configuration: str,
     code_size: int,
@@ -24,7 +24,7 @@ def generate(
     channels: int,
     output_folder: str,
     epochs: int,
-    cuda: bool,
+    device: str,
 ):
 
     from leakers.trainers.factory import LeakersConfigurationsBucket
@@ -55,7 +55,7 @@ def generate(
     hparams = configuration.to_dict()
     rich.print(hparams)
 
-    batch_size = 2 ** code_size
+    batch_size = 2**code_size
 
     module = LeakersTrainingModule(**hparams)
 
@@ -72,7 +72,7 @@ def generate(
     logger = pl_loggers.TensorBoardLogger(output_folder, name=name)
     torch.autograd.set_detect_anomaly(True)
     trainer = pl.Trainer(
-        gpus=-1 if cuda else 0,
+        accelerator=device,
         max_epochs=epochs,
         logger=logger,
         log_every_n_steps=10,

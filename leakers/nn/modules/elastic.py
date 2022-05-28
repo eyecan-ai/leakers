@@ -39,14 +39,14 @@ class ElasticEncoder(torch.nn.Module):
         self._input_channels = self._input_shape[0]
 
         # Computes final features map shape
-        fh, fw = (self._input_shape[1:3] / (2 ** n_layers)).astype(np.int32)
+        fh, fw = (self._input_shape[1:3] / (2**n_layers)).astype(np.int32)
         assert np.all(np.array([fh, fw]) >= 2), "Number of layers to big."
 
         # Creates a Sequential modules list
         layers = []
 
         # number of per-layer-filters
-        filters = [self._input_channels] + [cin * (2 ** i) for i in range(n_layers)]
+        filters = [self._input_channels] + [cin * (2**i) for i in range(n_layers)]
         for i in range(n_layers):
             layers.append(
                 self._build_basic_block(
@@ -113,7 +113,7 @@ class ElasticDecoder(torch.nn.Module):
         self._output_shape = np.array(output_shape)
         self._output_channels = output_shape[0]
 
-        fh, fw = (self._output_shape[1:3] / (2 ** n_layers)).astype(np.int32)
+        fh, fw = (self._output_shape[1:3] / (2**n_layers)).astype(np.int32)
         assert np.all(np.array([fh, fw]) >= 2), "number of layers to big."
 
         # Creates a Sequential modules list
@@ -126,20 +126,27 @@ class ElasticDecoder(torch.nn.Module):
         layers.append(torch.nn.Linear(latent_size, initial_size))
         layers.append(Rearrange("b (c h w) -> b c h w", c=cout, h=fh, w=fw))
 
-        filters = [cout // (2 ** i) for i in range(n_layers + 1)] + [
+        filters = [cout // (2**i) for i in range(n_layers + 1)] + [
             self._output_channels
         ]
 
         for i in range(n_layers):
             layers.append(
                 self._build_basic_block(
-                    cin=filters[i], cout=filters[i + 1], k=k, bn=bn, act=act_middle
+                    cin=filters[i],
+                    cout=filters[i + 1],
+                    k=k,
+                    bn=bn,
+                    act=act_middle,
                 )
             )
 
         layers.append(
             self._build_last_block(
-                cin=filters[-2], cout=filters[-1], k=k, bn=bn, act=act_middle
+                cin=filters[-2],
+                cout=filters[-1],
+                k=k,
+                bn=bn,
             )
         )
         layers.append(eval(act_last)() if act_last is not None else Identity())
@@ -188,13 +195,12 @@ class ElasticDecoder(torch.nn.Module):
         cout: int,
         k: int = 3,
         bn: bool = True,
-        act: str = "torch.nn.ReLU",
     ):
         pad = int((k - 1) / 2)
         layers = torch.nn.Sequential(
             torch.nn.Conv2d(cin, cout, k, 1, pad),
-            # eval(act)(),
-            # torch.nn.Conv2d(cout, cout, k, 1, pad),
+            torch.nn.ReLU(),
+            torch.nn.Conv2d(cout, cout, k, 1, pad),
         )
         layers = [x for x in layers if not isinstance(x, Identity)]
         return torch.nn.Sequential(*layers)
