@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Optional, Tuple
+import numpy as np
 import torch
 import kornia.geometry.transform as KT
 
@@ -11,6 +12,13 @@ class LeakerModule(torch.nn.Module):
     @abstractmethod
     def image_shape(self) -> Tuple[int, int, int]:
         pass
+
+    @abstractmethod
+    def code_size(self) -> int:
+        raise NotImplementedError()
+
+    def alphabet_size(self) -> int:
+        return 2 ** self.code_size()
 
     def _rotate(
         self, image: torch.Tensor, k: Optional[torch.Tensor] = None

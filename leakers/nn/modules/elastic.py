@@ -248,6 +248,9 @@ class ElasticCoder(LeakerModule):
             bn=bn,
         )
 
+    def code_size(self) -> int:
+        return self._code_size
+
     def image_shape(self) -> Tuple[int, int, int]:
         return self._image_shape
 
@@ -261,9 +264,15 @@ class ElasticCoder(LeakerModule):
     def encode(self, images: torch.Tensor) -> Dict[str, torch.Tensor]:
         z = self.encoder(images)
         code = z[:, : self._code_size]
+        scores = torch.abs(code)
         rot_logits = z[:, self._code_size : self._code_size + 4]
         rot_classes = torch.argmax(rot_logits, dim=1)
-        return {"code": code, "rot_logits": rot_logits, "rot_classes": rot_classes}
+        return {
+            "code": code,
+            "scores": scores,
+            "rot_logits": rot_logits,
+            "rot_classes": rot_classes,
+        }
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         gen = self.generate(x)

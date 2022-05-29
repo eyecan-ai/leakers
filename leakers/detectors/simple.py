@@ -37,14 +37,27 @@ class LeakersDetector(object):
         d3 = np.linalg.norm(c3 - c0)
         ratios = [d0 / d1, d0 / d2, d0 / d3]
 
-    def detect(self, image: np.ndarray) -> Sequence[Dict]:
+    def detect(self, image: np.ndarray, padding: int = 0) -> Sequence[Dict]:
         """Detect leakers from image
 
         :param image: input image
         :type image: np.ndarray
+        :param padding: padding size, defaults to 0
+        :type padding: int, optional
         :return: list of detected leakers
         :rtype: Sequence[Dict]
         """
+
+        if padding > 0:
+            image = cv2.copyMakeBorder(
+                image,
+                padding,
+                padding,
+                padding,
+                padding,
+                cv2.BORDER_CONSTANT,
+                value=[255, 255, 255],
+            )
 
         detections = self._build_detections(image, size=self.leaker_size)
 
@@ -188,6 +201,7 @@ class LeakersDetector(object):
         # predict code / word idx
         out = self.model.encode(x)
         code = out["code"]
+        scores = out["scores"]
         code_idx = self.dataset.words_to_indices(code.detach().cpu().numpy())
         rot = out["rot_classes"].detach().cpu().numpy()
 

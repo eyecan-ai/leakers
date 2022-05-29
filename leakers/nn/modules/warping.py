@@ -1,8 +1,11 @@
+from ctypes import Union
 import numpy as np
+import pydantic
 import torch
 import kornia.geometry as kgeometry
-from typing import Tuple
+from typing import List, Optional, Tuple
 import transforms3d
+from leakers.utils import TransformsUtils
 
 
 class WarpingModule(torch.nn.Module):
@@ -254,3 +257,111 @@ class WarpingModule(torch.nn.Module):
         )
 
         return unwarped_img
+
+
+class WarpingPlugTester:
+    def __init__(
+        self,
+        focal_length: float,
+        canvas_size: List[int] = [500, 500],
+    ) -> None:
+
+        # virtual canvas size
+        self._canvas_size = canvas_size
+        H, W = self._canvas_size
+
+        # camera matrix
+        self._K = (
+            torch.tensor(
+                np.array(
+                    [
+                        [focal_length, 0, W / 2.0],
+                        [0, focal_length, H / 2.0],
+                        [0, 0, 1],
+                    ]
+                )
+            )
+            .unsqueeze(0)
+            .float()
+        )
+
+        # image warper
+        self._warper = WarpingModule(camera_matrix=self._K)
+
+    def spherical_transform(
+        self,
+        radius: float = 1.0,
+        azimuth: float = 45.0,
+        zenith: float = 45.0,
+    ) -> torch.Tensor:
+        T_offset = TransformsUtils.translation_transform(0.0, 0.0, 0.0)
+        T = WarpingModule.spherical_marker_transform(radius, azimuth, zenith)
+        T = np.dot(T, T_offset)
+        T = torch.Tensor(T).unsqueeze(0)
+        return T
+
+    def warp_image(
+        self,
+        x: torch.Tensor,
+        radius: float = 1.0,
+        azimuth: float = 45.0,
+        zenith: float = 45.0,
+        background: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+
+        # virtual canvas size
+        mH, mW = x.shape[2:]
+        H, W = self._canvas_size
+
+        if background is None:
+            background = torch.ones((1, 3, H, W)).float()
+
+        mask = torch.ones_like(x)
+
+        T = self.spherical_transform(radius, azimuth, zenith)
+
+        # warp mask
+        warped_mask = self._warper.warp_image(
+            mask,
+            transforms=T,
+            canvas_size=[H, W],
+            mode="bilinear",
+        )
+
+        # warp input image
+        warped_x = self._warper.warp_image(
+            x,
+            transforms=T,
+            canvas_size=[H, W],
+            mode="bilinear",
+        )
+
+        # compose virtual image with background
+        virtual_image = warped_x * warped_mask + background * (1 - warped_mask)
+
+        # wark image back
+        unwarped_img = self._warper.unwarp_image(
+            warped_x,
+            transforms=T,
+            square_size=[mH, mW],
+            mode="bilinear",
+        )
+
+        return {
+            "virtual_image": virtual_image,
+            "unwarped_img": unwarped_img,
+            "warped_image": warped_x,
+            "warped_mask": warped_mask,
+            "area": torch.count_nonzero(warped_mask),
+        }
+
+
+class PlugTestConfiguration(pydantic.BaseModel):
+    detection_padding: int = 10
+    focal_length: float = 1000.0
+    canvas_size: List[int] = [500, 500]
+    marker_size: int = 64
+    radiuses: List[float] = [0.3, 0.5, 1.0, 2, 5, 8, 10]
+    azimuths: List[float] = [0, 10, 20, 30, 40, 45]
+    zeniths: List[float] = [0, 30, 50, 70] + np.arange(80, 90, 1).tolist()
+    ids: Optional[List[int]] = None

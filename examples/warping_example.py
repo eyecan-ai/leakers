@@ -1,4 +1,4 @@
-from typing import List, Sequence, Optional
+from typing import List, Sequence, Optional, Union
 import cv2
 from PIL import Image
 import rich
@@ -83,8 +83,14 @@ class CVMarker:
 
 
 class ArucoDetector:
-    def __init__(self, aruco_dict: str = "DICT_4X4_50") -> None:
-        self._aruco_dict = cv2.aruco.Dictionary_get(CVMarkerDICTS[aruco_dict])
+    def __init__(self, aruco_dict: Union[str, tuple] = (8, 3)) -> None:
+
+        if isinstance(aruco_dict, str):
+            self._aruco_dict = cv2.aruco.Dictionary_get(CVMarkerDICTS[aruco_dict])
+        elif isinstance(aruco_dict, tuple):
+            self._aruco_dict = cv2.aruco.custom_dictionary(*aruco_dict)
+        else:
+            raise ValueError("Unknown aruco dict type")
 
     def detect(self, image: np.ndarray, padding: int = 0) -> np.ndarray:
         if padding > 0:
@@ -218,7 +224,7 @@ def test_square3d():
     canvas_size = [500, 500]
     marker_size = [64, 64]
     plug_tester = MarkerPlugTester(focal_length=1000, canvas_size=canvas_size)
-    aruco_dict = "DICT_ARUCO_ORIGINAL"
+    aruco_dict = (8, 3)  # "DICT_ARUCO_ORIGINAL"
     aruco_detector = ArucoDetector(aruco_dict=aruco_dict)
 
     marker_img = aruco_detector.generate(marker_size[0], 0)
@@ -236,7 +242,7 @@ def test_square3d():
         .float()
     )
 
-    results = plug_tester.warp_image(x, 9, 0, 0)
+    results = plug_tester.warp_image(x, 5, 45, 50)
 
     virtual_image = results["virtual_image"]
     warped_image = results["warped_image"]
