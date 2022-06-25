@@ -83,8 +83,6 @@ def bench_leakers():
 
         x = torch.tensor(marker_img / 255.0).permute(2, 0, 1).unsqueeze(0).float()
 
-        plug_tester.warp_image(x, radius, azimuth, zenith)
-
         out = {
             "aruco_dict": dictionary,
             "marker_id": int(marker_id),

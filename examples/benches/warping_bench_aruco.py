@@ -1,7 +1,7 @@
 import rich
 import torch
 import numpy as np
-from examples.warping_bench import ArucoDetector
+from leakers.detectors.aruco import ArucoDetector
 from leakers.detectors.factory import LeakersDetectorsFactory
 from leakers.nn.modules.warping import (
     PlugTestConfiguration,
@@ -75,8 +75,6 @@ def bench_aruco():
             .repeat(1, 3, 1, 1)
             .float()
         )
-
-        plug_tester.warp_image(x, radius, azimuth, zenith)
 
         out = {
             "aruco_dict": aruco_dict,
