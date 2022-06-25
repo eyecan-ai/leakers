@@ -1,10 +1,14 @@
+from leakers.nn.modules.codeformer import PoolFormerCoder
 from leakers.nn.modules.elastic import ElasticCoder
 from leakers.nn.modules.randomizers import VirtualRandomizer
 
 
 class LeakerModuleFactory:
 
-    FACTORY_MAP = {"elastic": ElasticCoder}
+    FACTORY_MAP = {
+        "elastic": ElasticCoder,
+        "codeformer": PoolFormerCoder,
+    }
 
     @classmethod
     def create(cls, cfg: dict):

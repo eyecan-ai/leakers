@@ -22,7 +22,7 @@ def display_image(img):
 def bench_leakers():
 
     # Parameters
-    leakers_filaneme = "leaker_code.leak"
+    leakers_filaneme = "../codeformer/leaker_code.leak"
     device = "cpu"
 
     # Marker image

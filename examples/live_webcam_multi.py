@@ -12,7 +12,7 @@ PAD = lambda x, padding, color: cv2.copyMakeBorder(
     value=[color, color, color],
 )
 
-checkpoint = "/tmp/leakers/leaker_alpha/version_3/checkpoints/epoch=1498-step=1498.ckpt"
+checkpoint = "/tmp/leakers/leaker_code/version_2/checkpoints/last.ckpt"
 detector = LeakersDetectorsFactory.create_from_checkpoint(filename=checkpoint)
 
 leakers = detector.generate_raw_leakers()
@@ -25,7 +25,7 @@ mosaic = PAD(PAD(mosaic, 5, 0), 32, 255)
 cv2.imshow(f"Mosaic", mosaic)
 cv2.waitKey(1)
 
-cam = cv2.VideoCapture("http://192.168.1.3:4747/video")
+cam = cv2.VideoCapture("http://192.168.1.4:4747/video")
 while True:
     ret_val, img = cam.read()
     if not ret_val:

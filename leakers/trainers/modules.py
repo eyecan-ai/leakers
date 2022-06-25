@@ -17,6 +17,9 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
 
         # Randomizer Model
         self.randomizer = RandomizersFactory.create(self.hparams.randomizer)
+        self.randomizer_warmup_epochs = self.hparams.training[
+            "randomizer_warmup_epochs"
+        ]
 
         # Reference dataset to compute word-to-index conversion
         self.proto_dataset = AlphabetDatasetFactory.create(self.hparams.dataset)
@@ -32,6 +35,13 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
 
     def forward(self, x):
         return self.model(x)
+
+    def _randomize(self, x):
+        if self.current_epoch >= self.randomizer_warmup_epochs:
+            print("RR")
+            return self.randomizer(x)
+        else:
+            return x
 
     def training_step(self, batch, batch_idx):
 
@@ -51,7 +61,7 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
         imgs = self.model.generate(code, angles)
 
         # Randomize Leakers
-        imgs = self.randomizer(imgs)
+        imgs = self._randomize(imgs)
 
         # Compute leakers codes
         out = self.model.encode(imgs)
@@ -93,7 +103,7 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
 
             # Generate and Transform Leakers
             imgs = self.model.generate(code, angles)
-            imgs_t = self.randomizer(imgs)
+            imgs_t = self._randomize(imgs)
 
             # Log images
             if batch_idx == 0 and rot == 0:

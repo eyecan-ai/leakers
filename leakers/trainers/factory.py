@@ -61,5 +61,6 @@ class LeakersConfigurationsBucket:
             "optimizer": {
                 "lr": 0.0001,
             },
+            "training": {"randomizer_warmup_epochs": 2},
         }
     }
