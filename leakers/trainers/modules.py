@@ -1,3 +1,4 @@
+from leakers.datasets.alphabet import AlphabetDataset
 from leakers.datasets.factory import AlphabetDatasetFactory
 from leakers.nn.modules.base import LeakerModule
 from leakers.nn.modules.factory import LeakerModuleFactory, RandomizersFactory
@@ -6,7 +7,7 @@ import torch
 import pytorch_lightning as pl
 
 
-class LeakersTrainingModule(pl.LightningModule, ImageLogger):
+class TrainableLeakers(pl.LightningModule, ImageLogger):
     def __init__(self, **kwargs):
         super().__init__()
 
@@ -119,6 +120,189 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
             # Extract word index from codes
             code_pred = out["code"].detach().cpu().numpy()
             code_idx_pred = self.proto_dataset.words_to_indices(code_pred)
+            code_idx = y.cpu().numpy()
+
+            # Extract rotation classes
+            rot_target = angles
+            rot_pred = out["rot_classes"]
+
+            # Computer running corrects
+            code_corrects += (code_idx == code_idx_pred).sum().item()
+            code_total += B
+            rot_corrects += (rot_target == rot_pred).sum().item()
+            rot_total += B
+
+        return {
+            "code_corrects": torch.Tensor([code_corrects]),
+            "code_total": torch.Tensor([code_total]),
+            "rot_corrects": torch.Tensor([rot_corrects]),
+            "rot_total": torch.Tensor([rot_total]),
+        }
+
+    def validation_epoch_end(self, outputs) -> None:
+
+        # Merge Results provided as List of Dicts
+        code_total = PipelineUtils.sum_outputs(outputs, key="code_total")
+        code_corrects = PipelineUtils.sum_outputs(outputs, key="code_corrects")
+        rot_total = PipelineUtils.sum_outputs(outputs, key="rot_total")
+        rot_corrects = PipelineUtils.sum_outputs(outputs, key="rot_corrects")
+
+        # Compute accuracy
+        code_accuracy = code_corrects / code_total
+        rot_accuracy = rot_corrects / rot_total
+        self.log("val/accuracy/code", code_accuracy)
+        self.log("val/accuracy/rot", rot_accuracy)
+
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer["lr"])
+
+
+from pydantic import BaseModel, PrivateAttr
+
+
+class LossesParameters(BaseModel):
+    code_loss: str = "torch.nn.SmoothL1Loss"
+    code_loss_weight: float = 1.0
+    rot_loss_weight: float = 0.1
+
+
+class TrainingParameters(BaseModel):
+    randomizer_warmup_epochs: int = 0
+    randomize_rotations: bool = True
+
+
+class OptimizerParameters(BaseModel):
+    lr: float = 0.0001
+
+
+class TrainableLeakers(pl.LightningModule, ImageLogger):
+    def __init__(
+        self,
+        coder: LeakerModule,
+        dataset: AlphabetDataset,
+        randomizer: torch.nn.Module,
+        losses: LossesParameters = LossesParameters(),
+        training: TrainingParameters = TrainingParameters(),
+        optimizer: OptimizerParameters = OptimizerParameters(),
+    ):
+        super().__init__()
+
+        sanitized_hparams = {
+            "coder": coder.dict(),
+            "dataset": dataset.dict(),
+            "randomizer": randomizer.dict(),
+            "losses": losses.dict(),
+            "training": training.dict(),
+            "optimizer": optimizer.dict(),
+        }
+        self.save_hyperparameters(sanitized_hparams)
+
+        # Coder Model
+        self._model: LeakerModule = coder
+
+        # Randomizer Model
+        self._randomizer = randomizer
+        self._randomizer_warmup_epochs = training.randomizer_warmup_epochs
+
+        # Reference dataset to compute word-to-index conversion
+        self._proto_dataset = dataset
+
+        # # Losses
+        self._code_loss = eval(losses.code_loss)()
+        self._rot_loss = torch.nn.CrossEntropyLoss()
+        self._weight_code = losses.code_loss_weight
+        self._weight_rot = losses.rot_loss_weight
+
+        # Rotations
+        self._randomize_rotation = training.randomize_rotations
+
+        # Optimizer
+
+    def forward(self, x):
+        return self.model(x)
+
+    def _randomize(self, x):
+        if self.current_epoch >= self._randomizer_warmup_epochs:
+            return self._randomizer(x)
+        else:
+            return x
+
+    def training_step(self, batch, batch_idx):
+
+        # Extract data
+        code = batch["x"].contiguous()
+        B, _ = code.shape
+
+        # Compute input angles classes
+        if self._randomize_rotation:
+            angles = torch.randint(0, 4, [B]).to(code.device)
+        else:
+            angles = (
+                torch.Tensor([self.global_step % 4]).repeat(B).to(code.device).long()
+            )
+
+        # Generate Leakers
+        imgs = self._model.generate(code, angles)
+
+        # Randomize Leakers
+        imgs = self._randomize(imgs)
+
+        # Compute leakers codes
+        out = self._model.encode(imgs)
+
+        # Predicted codes
+        code_pred = out["code"]
+        rot_logit = out["rot_logits"]
+
+        # Losses
+        loss_code = self._code_loss(code, code_pred)
+        loss_rot = self._rot_loss(rot_logit, angles)
+        loss = self._weight_code * loss_code + self._weight_rot * loss_rot
+
+        self.log("train/loss", loss.item())
+        self.log("train/loss_rot", loss_rot.item())
+        self.log("train/loss_code", loss_code.item())
+
+        return {
+            "loss": loss,
+            "loss_code": loss_code.detach(),
+            "loss_rot": loss_rot.detach(),
+        }
+
+    def validation_step(self, batch, batch_idx):
+
+        # Extract data
+        code = batch["x"]
+        y = batch["y"]
+        B, _ = code.shape
+
+        # Initalize running counters
+        code_corrects = 0.0
+        code_total = 0.0
+        rot_corrects = 0.0
+        rot_total = 0.0
+
+        for rot in [0, 1, 2, 3]:
+            angles = torch.Tensor([rot]).repeat(B).to(code.device).long()
+
+            # Generate and Transform Leakers
+            imgs = self._model.generate(code, angles)
+            imgs_t = self._randomize(imgs)
+
+            # Log images
+            if batch_idx == 0 and rot == 0:
+                # self.debug_display(imgs, imgs_t)
+                self.log_image(
+                    "val/leakers",
+                    TensorUtils.display_tensors([imgs, imgs_t], max_batch_size=8),
+                )
+
+            # Compute leakers codes
+            out = self._model.encode(imgs_t)
+
+            # Extract word index from codes
+            code_pred = out["code"].detach().cpu().numpy()
+            code_idx_pred = self._proto_dataset.words_to_indices(code_pred)
             code_idx = y.cpu().numpy()
 
             # Extract rotation classes

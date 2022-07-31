@@ -9,7 +9,7 @@ class LeakersDetectorsFactory:
     def create_from_checkpoint(cls, filename: str, device: str = "cpu"):
         module = LeakersInferenceModuleFactory.create_from_checkpoint(filename, device)
         model: LeakerModule = module.model
-        dataset: AlphabetDataset = module.proto_dataset
+        dataset: AlphabetDataset = module._proto_dataset
         detector = LeakersDetector(
             model=model, dataset=dataset, grayscale=model.image_shape()[0] == 1
         )

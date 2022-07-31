@@ -1,0 +1,29 @@
+
+module:
+  $call: leakers.trainers.modules.TrainableLeakers
+  $args:
+    ###
+    coder:
+      $call: leakers.nn.modules.elastic.CoderElastic
+      $args:
+        shape: [3,32,32]
+        word_size: 4
+        activation_middle:  "torch.nn.ReLU"
+        use_batchnorm: True
+    ###
+    dataset:
+      $model: leakers.datasets.alphabet.DatasetBinaryAlphabet
+      $args:
+        width: 4
+    ###
+    randomizer:
+      $call: leakers.nn.modules.randomizers.VirtualRandomizer
+      $args:
+        color_jitter: true
+        image_shape: [3,32,32]
+        random_erasing: true
+        warper: true
+dataset:
+    $model: leakers.datasets.alphabet.DatasetBinaryAlphabet
+    $args:
+      width: 4

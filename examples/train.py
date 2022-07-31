@@ -4,7 +4,7 @@ from leakers.datasets.factory import AlphabetDatasetFactory
 import pytorch_lightning as pl
 import pytorch_lightning.loggers as pl_loggers
 import click
-from leakers.trainers.modules import LeakersTrainingModule
+from leakers.trainers.modules import TrainableLeakers
 import torch
 
 
@@ -23,7 +23,7 @@ def train(output_folder: str, epochs: int):
     checkpoint = ""
     device = "cpu"
     code_size = 3
-    batch_size = 2 ** code_size
+    batch_size = 2**code_size
     image_shape = [1, 64, 64]
     hparams = {
         "coder": {
@@ -61,7 +61,7 @@ def train(output_folder: str, epochs: int):
         },
     }
 
-    module = LeakersTrainingModule(**hparams)
+    module = TrainableLeakers(**hparams)
 
     # dataset
     datamodule = GenericAlphabetDatamodule(
@@ -69,7 +69,7 @@ def train(output_folder: str, epochs: int):
     )
 
     # model = RotPredictor().to(device)
-    module = LeakersTrainingModule(**hparams)
+    module = TrainableLeakers(**hparams)
 
     logger = pl_loggers.TensorBoardLogger(output_folder, name=experiment_name)
     torch.autograd.set_detect_anomaly(True)

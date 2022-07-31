@@ -1,5 +1,5 @@
 from leakers.datasets.datamodules import GenericAlphabetDatamodule
-from leakers.trainers.modules import LeakersTrainingModule
+from leakers.trainers.modules import TrainableLeakers
 from leakers.datasets.factory import AlphabetDatasetFactory
 import pytorch_lightning as pl
 
@@ -44,11 +44,11 @@ class TestLeakersTrainingModule:
             },
         }
 
-        module = LeakersTrainingModule(**hparams)
+        module = TrainableLeakers(**hparams)
         dataset = AlphabetDatasetFactory.create(hparams["dataset"])
 
         datamodule = GenericAlphabetDatamodule(
-            dataset=dataset, batch_size=2 ** code_size
+            dataset=dataset, batch_size=2**code_size
         )
 
         trainer = pl.Trainer(

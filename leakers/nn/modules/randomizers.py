@@ -1,8 +1,10 @@
+from typing import List, Tuple
 import torch
 import kornia.augmentation as K
 import numpy as np
 from torch.nn.modules.linear import Identity
 from leakers.nn.modules.warping import WarpingModule
+from pydantic import BaseModel, Extra, PrivateAttr
 
 
 class VirtualRandomizer(torch.nn.Module):
@@ -10,6 +12,7 @@ class VirtualRandomizer(torch.nn.Module):
 
     def __init__(self, **kwargs) -> None:
         super().__init__()
+        self._hparams = kwargs
 
         # Image shape
         image_shape = np.array(kwargs.get("image_shape", [3, 64, 64]))
@@ -142,6 +145,9 @@ class VirtualRandomizer(torch.nn.Module):
             camera_matrix=self._camera_matrix, virtual_size=self._warper_virtual_size
         )
 
+    def dict(self) -> dict:
+        return self._hparams
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
         if self._warper:
@@ -158,6 +164,183 @@ class VirtualRandomizer(torch.nn.Module):
             )
             x = self._warper.unwarp_image(
                 canvas_image=warped, transforms=T, square_size=self._image_size
+            )
+
+        x = torch.clamp(x, 0.0 + self.EPS, 1.0 - self.EPS)  # Nan if overflow!
+        return self._layers(x)
+
+
+class RandomizerVirtualCamera(BaseModel, torch.nn.Module, extra=Extra.forbid):
+    EPS = 1e-10
+
+    image_shape: Tuple[int, int, int] = (3, 64, 64)
+
+    # Color Jitter
+    color_jitter: bool = True
+    color_jitter_brightness: float = 0.5
+    color_jitter_contrast: float = 0.5
+    color_jitter_saturation: float = 0.5
+    color_jitter_hue: float = 0.5
+    color_jitter_p: float = 0.5
+
+    # Random Crop
+    random_crop_percentage: int = -1
+
+    # Channel Shuffle
+    channel_shuffle: bool = False
+    channel_shuffle_p: float = 0.5
+
+    # Gaussian Noise
+    gaussian_noise: bool = True
+    gaussian_noise_mean: float = 0.0
+    gaussian_noise_std: float = 0.05
+    gaussian_noise_p: float = 0.5
+
+    # Random Affine
+    random_affine: bool = True
+    random_affine_rotation: float = 15
+    random_affine_translate: List[float] = [0.1, 0.1]
+    random_affine_scale: List[float] = [0.9, 1.1]
+    random_affine_p: float = 0.5
+
+    # Box Blur
+    box_blur: bool = True
+    box_blur_size: Tuple[int, int] = (35, 35)
+    box_blur_p: float = 0.5
+
+    # Random Erasing
+    random_erasing: bool = True
+    random_erasing_scale: Tuple[float, float] = (0.02, 0.1)
+    random_erasing_ratio: Tuple[float, float] = (0.8, 1.2)
+    random_erasing_p: float = 0.5
+
+    # Warper
+    warper: bool = True
+    warper_distance_range: List[float] = [1, 10.0]
+    warper_azimuth_range: List[float] = [0, 360.0]
+    warper_zenith_range: List[float] = [10, 85.0]
+    warper_canvas_size: Tuple[int, int] = (500, 500)
+    warper_focal: float = 2000
+    warper_virtual_size: float = 0.05
+
+    #
+    _warper = PrivateAttr()
+    _camera_matrix = PrivateAttr()
+    _layers = PrivateAttr()
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+
+        # Image shape
+        image_size = self.image_shape[1:3]
+        channels = self.image_shape[0]
+
+        # Random Crop
+        random_crop = (
+            self.random_crop_percentage > 0 and self.random_crop_percentage <= 1.0
+        )
+        random_crop_size = image_size * self.random_crop_percentage
+
+        layers = torch.nn.Sequential(
+            # ----------------------------
+            # Color Jitter
+            K.ColorJitter(
+                brightness=self.color_jitter_brightness,
+                contrast=self.color_jitter_contrast,
+                saturation=self.color_jitter_saturation,
+                hue=self.color_jitter_hue,
+                p=self.color_jitter_p,
+            )
+            if self.color_jitter
+            else Identity(),
+            # ----------------------------
+            # Random Crop
+            K.RandomCrop(random_crop_size, p=1.0) if random_crop else Identity(),
+            torch.nn.Upsample(image_size) if random_crop else Identity(),
+            # ----------------------------
+            # Channel Shuffe
+            K.RandomChannelShuffle(p=self.channel_shuffle_p)
+            if self.channel_shuffle
+            else Identity(),
+            # ----------------------------
+            # Gaussian Noise
+            K.RandomGaussianNoise(
+                mean=self.gaussian_noise_mean,
+                std=self.gaussian_noise_std,
+                p=self.gaussian_noise_p,
+            )
+            if self.gaussian_noise
+            else Identity(),
+            # ----------------------------
+            # Random Affine
+            K.RandomAffine(
+                self.random_affine_rotation,
+                translate=torch.Tensor(self.random_affine_translate),
+                scale=torch.Tensor(self.random_affine_scale),
+                p=self.random_affine_p,
+            )
+            if self.random_affine
+            else Identity(),
+            # ----------------------------
+            # Box Blurr
+            K.RandomBoxBlur(kernel_size=self.box_blur_size, p=self.box_blur_p)
+            if self.box_blur
+            else Identity(),
+            # ----------------------------
+            # Random Erasing
+            K.RandomErasing(
+                scale=self.random_erasing_scale,
+                ratio=self.random_erasing_ratio,
+                p=self.random_erasing_p,
+            )
+            if self.random_erasing
+            else Identity(),
+        )
+
+        layers = [x for x in layers if not isinstance(x, Identity)]
+        self._layers = torch.nn.Sequential(*layers)
+
+        # Warper
+
+        camera_matrix = np.array(
+            [
+                self.warper_focal,
+                0,
+                self.warper_canvas_size[0] / 2.0,
+                0,
+                self.warper_focal,
+                self.warper_canvas_size[1] / 2.0,
+                0,
+                0,
+                1,
+            ]
+        ).reshape((3, 3))
+        self._camera_matrix = torch.Tensor(camera_matrix).unsqueeze(0)
+        self._warper = WarpingModule(
+            camera_matrix=self._camera_matrix,
+            virtual_size=self.warper_virtual_size,
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        if self._warper:
+            B, C, H, W = x.shape
+            T = WarpingModule.random_spherical_transforms(
+                batch_size=B,
+                radius_range=self.warper_distance_range,
+                azimuth_range=self.warper_azimuth_range,
+                zenith_range=self.warper_zenith_range,
+            ).to(x.device)
+
+            warped = self._warper.warp_image(
+                source_image=x,
+                transforms=T,
+                canvas_size=self.warper_canvas_size,
+            )
+            x = self._warper.unwarp_image(
+                canvas_image=warped,
+                transforms=T,
+                square_size=self.image_shape[1],
             )
 
         x = torch.clamp(x, 0.0 + self.EPS, 1.0 - self.EPS)  # Nan if overflow!

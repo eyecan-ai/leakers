@@ -1,12 +1,13 @@
 from abc import abstractmethod
 from typing import Optional, Tuple
 import numpy as np
+from pydantic import BaseModel
 import torch
 import kornia.geometry.transform as KT
 
 
 class LeakerModule(torch.nn.Module):
-    def __init__(self, **kwargs):
+    def __init__(self):
         super().__init__()
 
     @abstractmethod

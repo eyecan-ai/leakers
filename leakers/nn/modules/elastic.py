@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 import torch
 import numpy as np
 from torch.nn.modules.linear import Identity
@@ -266,6 +266,100 @@ class ElasticCoder(LeakerModule):
         code = z[:, : self._code_size]
         scores = torch.abs(code)
         rot_logits = z[:, self._code_size : self._code_size + 4]
+        rot_classes = torch.argmax(rot_logits, dim=1)
+        return {
+            "code": code,
+            "scores": scores,
+            "rot_logits": rot_logits,
+            "rot_classes": rot_classes,
+        }
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        gen = self.generate(x)
+        code = self.encode(gen)["code"]
+        return code
+
+
+from pydantic import BaseModel, PrivateAttr, Extra
+
+
+class CoderElastic(LeakerModule):
+    def __init__(
+        self,
+        shape: Tuple[int, int, int],
+        word_size: int = 32,
+        input_channels: int = 32,
+        layers: int = 4,
+        kernel_size: int = 3,
+        use_batchnorm: bool = False,
+        activation_middle: str = "torch.nn.ReLU",
+        activation_latent: Optional[str] = None,  # "torch.nn.Sigmoid",
+        activation_output: str = "torch.nn.Sigmoid",
+    ) -> None:
+        super().__init__()
+
+        self.shape = shape
+        self.word_size = word_size
+        self.input_channels = input_channels
+        self.layers = layers
+        self.kernel_size = kernel_size
+        self.use_batchnorm = use_batchnorm
+        self.activation_middle = activation_middle
+        self.activation_latent = activation_latent
+        self.activation_output = activation_output
+
+        self._encoder = ElasticEncoder(
+            input_shape=self.shape,
+            latent_size=self.word_size + 4,
+            n_layers=self.layers,
+            cin=self.input_channels,
+            k=self.kernel_size,
+            act_middle=self.activation_middle,
+            act_last=self.activation_latent,
+            bn=self.use_batchnorm,
+        )
+
+        self._decoder = ElasticDecoder(
+            output_shape=self.shape,
+            latent_size=self.word_size,
+            n_layers=self.layers,
+            cin=self.input_channels,
+            act_middle=self.activation_middle,
+            act_last=self.activation_output,
+            bn=self.use_batchnorm,
+        )
+
+    def dict(self) -> dict:
+        return {
+            "shape": self.shape,
+            "word_size": self.word_size,
+            "input_channels": self.input_channels,
+            "layers": self.layers,
+            "kernel_size": self.kernel_size,
+            "use_batchnorm": self.use_batchnorm,
+            "activation_middle": self.activation_middle,
+            "activation_latent": self.activation_latent,
+            "activation_output": self.activation_output,
+        }
+
+    def code_size(self) -> int:
+        return self.word_size
+
+    def image_shape(self) -> Tuple[int, int, int]:
+        return self.shape
+
+    def generate(
+        self, code: torch.Tensor, angle_classes: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        image = self._decoder(code)
+        image_rot = self._rotate(image, k=angle_classes)
+        return image_rot
+
+    def encode(self, images: torch.Tensor) -> Dict[str, torch.Tensor]:
+        z = self._encoder(images)
+        code = z[:, : self.code_size()]
+        scores = torch.abs(code)
+        rot_logits = z[:, self.code_size() : self.code_size() + 4]
         rot_classes = torch.argmax(rot_logits, dim=1)
         return {
             "code": code,
