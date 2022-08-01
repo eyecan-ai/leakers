@@ -1,0 +1,39 @@
+coder:
+  params:
+    act_last: torch.nn.Sigmoid
+    act_latent: null
+    act_middle: torch.nn.ReLU
+    bn: false
+    cin: 32
+    code_size: '@int(code_size)'
+    image_shape:
+    - '@int(channels)'
+    - '@int(image_size)'
+    - '@int(image_size)'
+    k: 3
+    n_layers: 4
+  type: elastic
+dataset:
+  params:
+    bit_size: '@int(code_size)'
+  type: binary
+losses:
+  code_loss: torch.nn.SmoothL1Loss
+  code_loss_weight: 1.0
+  rot_loss_weight: 0.1
+optimizer:
+  lr: 0.0001
+randomizer:
+  params:
+    color_jitter: true
+    image_shape:
+    - '@int(channels)'
+    - '@int(image_size)'
+    - '@int(image_size)'
+    random_erasing: true
+    warper: true
+  type: virtual
+rotations:
+  randomize: false
+training:
+  randomizer_warmup_epochs: 2
