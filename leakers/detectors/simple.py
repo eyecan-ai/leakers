@@ -20,7 +20,7 @@ class LeakersDetector(object):
         self.th_C = 2
         self.min_max_area_size = [200, 600 * 400]
         self.eps_curve = 0.01
-        self.leaker_size = 64
+        self.leaker_size = model.image_shape()[-1]
         self._grayscale = grayscale
 
     def rectangle_info(self, points):
@@ -359,7 +359,7 @@ class LeakersDetector(object):
 
         raw_leakers = self.generate_raw_leakers(batch_size=batch_size)
         for raw_leaker in raw_leakers:
-            raw_leaker["image"] = PAD(PAD(raw_leaker["image"], border, 0), padding, 255)
+            raw_leaker["image"] = PAD(PAD(raw_leaker["image"], border, 0), padding, 1)
             raw_leaker["image"] = cv2.resize(
                 raw_leaker["image"],
                 (output_size, output_size),

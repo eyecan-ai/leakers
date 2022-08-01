@@ -49,7 +49,7 @@ class VirtualRandomizer(torch.nn.Module):
 
         # Box Blur
         box_blur = kwargs.get("box_blur", True)
-        box_blur_size = kwargs.get("box_blur_size", [35, 35])
+        box_blur_size = kwargs.get("box_blur_size", [5, 5])
         box_blur_p = kwargs.get("box_blur_p", 0.5)
 
         # Random Erasing

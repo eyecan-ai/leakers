@@ -327,7 +327,6 @@ class WarpingPlugTester:
             canvas_size=[H, W],
             mode="bilinear",
         )
-
         # warp input image
         warped_x = self._warper.warp_image(
             x,

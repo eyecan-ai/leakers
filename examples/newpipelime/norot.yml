@@ -20,7 +20,7 @@ dataset:
 losses:
   code_loss: torch.nn.SmoothL1Loss
   code_loss_weight: 1.0
-  rot_loss_weight: 0.1
+  rot_loss_weight: 0.0
 optimizer:
   lr: 0.0001
 randomizer:
@@ -31,6 +31,7 @@ randomizer:
     - '@int(image_size)'
     - '@int(image_size)'
     random_erasing: true
+    random_affine_rotation: 180
     warper: true
   type: virtual
 rotations:

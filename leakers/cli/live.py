@@ -6,7 +6,7 @@ import threading
 import time
 
 
-@click.command("live", help="Compile Configuration file")
+@click.command("live", help="Live detection of lekaers by means of any CV image source")
 @click.option("-m", "--model", required=True, help="Leakers Model File.")
 @click.option(
     "-s",

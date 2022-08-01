@@ -38,7 +38,6 @@ class LeakersTrainingModule(pl.LightningModule, ImageLogger):
 
     def _randomize(self, x):
         if self.current_epoch >= self.randomizer_warmup_epochs:
-            print("RR")
             return self.randomizer(x)
         else:
             return x
