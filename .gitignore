@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+.DS_store
+.DS_Store
 __pycache__/
 *.leak
 *.py[cod]

@@ -11,12 +11,16 @@ def debug():
 @debug.command("mosaic", help="Debug Leakers in a Mosaic fashon")
 @click.option("-m", "--model", required=True, help="Leakers Model File.")
 @click.option("-r", "--display_rows", default=2, help="leakers mosaic rows")
+@click.option("-o", "--output_file", default="", help="output file")
 @click.option("--cuda/--cpu", default=False, help="Cuda or CPU")
 def mosaic(
     model: str,
     display_rows: int,
+    output_file: str,
     cuda: bool,
 ):
+
+    debug_show = len(output_file) == 0
 
     import cv2
     import cv2
@@ -43,17 +47,23 @@ def mosaic(
     )
     leakers_images = (leakers_images * 255).astype(np.uint8)
 
-    cv2.namedWindow(f"whole", cv2.WINDOW_GUI_NORMAL)
-    cv2.imshow(f"whole", cv2.cvtColor(leakers_images, cv2.COLOR_RGB2BGR))
-    cv2.waitKey(0)
+    if debug_show:
+        cv2.namedWindow(f"whole", cv2.WINDOW_GUI_NORMAL)
+        cv2.imshow(f"whole", cv2.cvtColor(leakers_images, cv2.COLOR_RGB2BGR))
+        cv2.waitKey(0 if debug_show else 1)
 
     detections = detector.detect(leakers_images)
     rich.print(detections)
     for detection in detections:
         leakers_images = detector.draw_detection(leakers_images, detection)
 
-    cv2.imshow(f"whole", cv2.cvtColor(leakers_images, cv2.COLOR_RGB2BGR))
-    cv2.waitKey(0)
+    if debug_show:
+        cv2.imshow(f"whole", cv2.cvtColor(leakers_images, cv2.COLOR_RGB2BGR))
+        cv2.waitKey(0)
+
+    if not debug_show:
+        cv2.imwrite(output_file, cv2.cvtColor(leakers_images, cv2.COLOR_RGB2BGR))
+        rich.print(f"Saved to {output_file}")
 
 
 @debug.command("orbiter", help="Debug Leakers orbiting around them")
