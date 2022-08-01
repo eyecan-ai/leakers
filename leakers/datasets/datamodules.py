@@ -19,13 +19,19 @@ class GaloisDataset:
 
 class GenericAlphabetDatamodule(pl.LightningDataModule):
     def __init__(
-        self, dataset, batch_size: int, drop_last: bool = False, exapansion: int = 1
+        self,
+        dataset,
+        batch_size: int,
+        drop_last: bool = False,
+        exapansion: int = 1,
+        num_workers: int = 0,
     ):
         super().__init__()
         self._batch_size = batch_size
         self._drop_last = drop_last
         self._dataset = dataset
         self._expansion = exapansion
+        self._num_workers = num_workers
 
     def train_dataloader(self):
         return DataLoader(
@@ -33,6 +39,8 @@ class GenericAlphabetDatamodule(pl.LightningDataModule):
             batch_size=self._batch_size,
             shuffle=True,
             drop_last=self._drop_last,
+            pin_memory=True,
+            num_workers=self._num_workers,
         )
 
     def val_dataloader(self):
@@ -41,6 +49,8 @@ class GenericAlphabetDatamodule(pl.LightningDataModule):
             batch_size=self._batch_size,
             shuffle=False,
             drop_last=self._drop_last,
+            pin_memory=True,
+            num_workers=self._num_workers,
         )
 
     def test_dataloader(self):
@@ -49,4 +59,6 @@ class GenericAlphabetDatamodule(pl.LightningDataModule):
             batch_size=self._batch_size,
             shuffle=False,
             drop_last=self._drop_last,
+            pin_memory=True,
+            num_workers=self._num_workers,
         )

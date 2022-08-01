@@ -1,8 +1,11 @@
 from typing import Dict, Sequence, Tuple
+import cv2
+import numpy as np
 import torch
 from torch.utils.tensorboard.writer import SummaryWriter
 from pytorch_lightning.loggers.base import LoggerCollection
 from torchvision.utils import make_grid
+import torch.nn.functional as F
 
 
 class PipelineUtils(object):
@@ -115,3 +118,63 @@ class TensorUtils:
 
         grid = make_grid(stacks, nrow=1)
         return grid
+
+
+class Masquerade(torch.nn.Module):
+    def __init__(
+        self,
+        size: int = 128,
+        mask_type: str = "circle",
+        mask_ratio: float = 0.8,
+    ) -> None:
+        super().__init__()
+
+        self._size = size
+        self._mask_type = mask_type
+        self._mask_ratio = mask_ratio
+
+        TT = lambda x: torch.Tensor(x / 255.0).permute(2, 0, 1).float().unsqueeze(0)
+
+        if mask_type == "circle":
+            radius = int(size * mask_ratio / 2)
+            self.mask = np.zeros((self._size, self._size, 3), dtype=np.uint8)
+            self.mask = cv2.circle(
+                self.mask,
+                (self._size // 2, self._size // 2),
+                radius,
+                (255, 255, 255),
+                -1,
+            )
+        else:
+            raise NotImplementedError(f"Mask type [{self._mask_type}] not implemented")
+
+        self.mask_background = (
+            np.ones((self._size, self._size, 3), dtype=np.uint8) * 255
+        )
+        self.mask = TT(self.mask)
+        self.mask_background = TT(self.mask_background)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        B, C, H, W = x.shape
+
+        mask = F.interpolate(
+            self.mask,
+            size=(H, W),
+            mode="bilinear",
+            align_corners=False,
+        )
+        mask = mask.repeat(B, 1, 1, 1)
+
+        mask_background = F.interpolate(
+            self.mask_background,
+            size=(H, W),
+            mode="bilinear",
+            align_corners=False,
+        )
+        mask_background = mask_background.repeat(B, 1, 1, 1)
+
+        mask = mask.to(x.device)
+        mask_background = mask_background.to(x.device)
+        x = x * mask + mask_background * (1 - mask)
+        return x

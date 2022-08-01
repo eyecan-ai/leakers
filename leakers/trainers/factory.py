@@ -3,7 +3,7 @@ import torch
 
 import rich
 
-from leakers.trainers.modules import LeakersTrainingModule
+from leakers.trainers.modules import LeakersTrainingModule, RuneTrainingModule
 
 
 class LeakersInferenceModuleFactory:
@@ -64,3 +64,13 @@ class LeakersConfigurationsBucket:
             "training": {"randomizer_warmup_epochs": 2},
         }
     }
+
+
+class RunesInferenceModuleFactory:
+    @classmethod
+    def create_from_checkpoint(cls, filename: str, device="cpu"):
+        ckp = torch.load(filename, map_location=device)
+        hparams = ckp["hyper_parameters"]
+        module = RuneTrainingModule(**hparams)
+        module.load_state_dict(ckp["state_dict"])
+        return module.to(device)
