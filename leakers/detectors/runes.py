@@ -17,7 +17,7 @@ class RunesDetector(object):
     ):
 
         self.model = model
-        self.masquerade = Masquerade()
+        self.masquerade = Masquerade(mask_background=[255, 255, 255])
         self.dataset = dataset
         self.th_block_size = 11
         self.th_C = 2
@@ -69,7 +69,7 @@ class RunesDetector(object):
         code = out["code"]
         code_idx = self.dataset.words_to_indices(code.detach().cpu().numpy())
 
-        return {"code": code_idx[0], "rot": 0}
+        return {"code": code_idx[0], "rot": 0, "raw_code": code[0]}
 
     # def detect_multi_leaker(self, leaker_image: np.ndarray, splits: int = 2):
 

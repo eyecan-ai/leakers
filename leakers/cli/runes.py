@@ -58,7 +58,7 @@ def generate(
     hparams = configuration.to_dict()
     rich.print(hparams)
 
-    batch_size = 2**code_size
+    batch_size = 2 ** code_size
 
     module = RuneTrainingModule(**hparams)
 
@@ -114,6 +114,7 @@ def mosaic(
     import rich
     import numpy as np
     from einops import rearrange
+    import itertools
 
     device = "cuda" if cuda else "cpu"
     detector = RunesDetectorsFactory.create_from_checkpoint(
@@ -121,17 +122,35 @@ def mosaic(
     )
     leakers = detector.generate_leakers(
         border=0,
-        padding=10,
+        padding=0,
         output_size=256,
     )
 
-    leakers_images = np.array([leaker["image"] for leaker in leakers])
-    leakers_images = rearrange(
-        leakers_images,
+    leakers_images = [leaker["image"] for leaker in leakers]
+    # squares = [np.zeros_like(leakers_images[0])] * len(leakers_images)
+    squares = []
+    for idx in range(len(leakers_images)):
+        square = np.zeros_like(leakers_images[0])
+        square = cv2.putText(
+            square,
+            f"ID[{idx}] ->",
+            (20, 128),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            2,
+            (1.0, 1.0, 1.0),
+            2,
+            cv2.LINE_AA,
+        )
+        squares.append(square)
+
+    images = list(itertools.chain.from_iterable(zip(squares, leakers_images)))
+
+    board_image = rearrange(
+        images,
         "(bH bW) h w c -> (bH h) (bW w) c",
         bH=display_rows,
     )
-    leakers_images = (leakers_images * 255).astype(np.uint8)
+    board_image = (board_image * 255).astype(np.uint8)
 
     def cv_extract_roi_given_point(image, center, size):
         x, y = center
@@ -145,7 +164,7 @@ def mosaic(
     def cv_mouse_callback(event, x, y, flags, param):
         if event == cv2.EVENT_MOUSEMOVE:
             crop = cv_extract_roi_given_point(
-                image=leakers_images, center=(x, y), size=256
+                image=board_image, center=(x, y), size=256
             )
 
             detections = detector.detect_single_leaker(crop)
@@ -162,12 +181,13 @@ def mosaic(
             )
             rich.print(detections)
             cv2.imshow("crop", cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
-            cv2.waitKey(1)
 
     cv2.namedWindow(f"debug", cv2.WINDOW_GUI_NORMAL)
     cv2.setMouseCallback(f"debug", cv_mouse_callback)
     while True:
 
         # if debug_show:
-        cv2.imshow(f"debug", cv2.cvtColor(leakers_images, cv2.COLOR_RGB2BGR))
-        cv2.waitKey(1)
+        cv2.imshow(f"debug", cv2.cvtColor(board_image, cv2.COLOR_RGB2BGR))
+        k = cv2.waitKey(1)
+        if k == ord("q"):
+            break

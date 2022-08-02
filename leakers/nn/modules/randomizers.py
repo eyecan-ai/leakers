@@ -1,5 +1,6 @@
 import torch
 import kornia.augmentation as K
+from kornia.constants import SamplePadding
 import numpy as np
 from torch.nn.modules.linear import Identity
 from leakers.nn.modules.warping import WarpingModule
@@ -93,6 +94,7 @@ class VirtualRandomizer(torch.nn.Module):
                 translate=torch.Tensor(random_affine_translate),
                 scale=torch.Tensor(random_affine_scale),
                 p=random_affine_p,
+                padding_mode=SamplePadding.BORDER.name,
             )
             if random_affine
             else Identity(),

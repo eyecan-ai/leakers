@@ -14,7 +14,7 @@ class LeakersDetector(object):
         self, model: LeakerModule, dataset: AlphabetDataset, grayscale: bool = False
     ):
 
-        self.model = model
+        self.model = model.eval()
         self.dataset = dataset
         self.th_block_size = 11
         self.th_C = 2

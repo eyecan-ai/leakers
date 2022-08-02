@@ -26,6 +26,7 @@ optimizer:
 randomizer:
   params:
     color_jitter: true
+    color_jitter_hue: 0.1
     image_shape:
     - '@int(channels)'
     - '@int(image_size)'
