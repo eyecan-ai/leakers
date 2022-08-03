@@ -1,4 +1,4 @@
-from typing import Dict, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 import numpy as np
 import cv2
 import torch
@@ -13,11 +13,21 @@ import torch.nn.functional as F
 
 class RunesDetector(object):
     def __init__(
-        self, model: LeakerModule, dataset: AlphabetDataset, grayscale: bool = False
+        self,
+        model: LeakerModule,
+        dataset: AlphabetDataset,
+        grayscale: bool = False,
+        device: str = "cpu",
+        masquerade: Optional[torch.nn.Module] = None,
     ):
 
         self.model = model
-        self.masquerade = Masquerade(mask_background=[255, 255, 255])
+        self.device = device
+        self.masquerade = (
+            masquerade
+            if masquerade is not None
+            else Masquerade(mask_background=[255, 255, 255])
+        )
         self.dataset = dataset
         self.th_block_size = 11
         self.th_C = 2
@@ -93,15 +103,18 @@ class RunesDetector(object):
         leakers = []
         for sample in datamodule.val_dataloader():
 
-            imgs = self.model.generate(sample["x"])
+            x = sample["x"].to(self.device)
+            y = sample["y"].to(self.device)
+
+            imgs = self.model.generate(x)
             imgs = self.masquerade(imgs)
-            y = sample["y"]
 
             B, C, H, W = imgs.shape
             for b in range(B):
                 leakers.append(
                     {
                         "id": y[b].item(),
+                        "code": x[b].detach().cpu().numpy().tolist(),
                         "image": imgs[b, ::].permute(1, 2, 0).detach().cpu().numpy(),
                     }
                 )

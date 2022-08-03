@@ -200,6 +200,77 @@ class Masquerade(torch.nn.Module):
         return x
 
 
+class MasqueradeByImage(torch.nn.Module):
+    def __init__(
+        self,
+        image_filename: str,
+        size: int = 128,
+        mask_background: Optional[Tuple[int, int, int]] = None,
+    ) -> None:
+        super().__init__()
+
+        import imageio
+
+        self._size = size
+        self._image_filename = image_filename
+        self._image = imageio.imread(image_filename)[:, :, :3]
+        self._mask_background = mask_background
+        self._randomize_mask = mask_background is None
+
+        TT = lambda x: torch.Tensor(x / 255.0).permute(2, 0, 1).float().unsqueeze(0)
+
+        self.mask = self._image
+        if len(self.mask.shape) == 2:
+            self.mask = cv2.cvtColor(self.mask, cv2.COLOR_GRAY2RGB)
+
+        self.mask = TT(self.mask)
+
+        if self._randomize_mask:
+            self.mask_background = (
+                np.ones((self._size, self._size, 3), dtype=np.uint8) * 255
+            )
+            self.mask_background = TT(self.mask_background)
+        else:
+            self.mask_background = (
+                torch.Tensor(np.array(self._mask_background) / 255.0)
+                .unsqueeze(0)
+                .unsqueeze(0)
+                .unsqueeze(0)
+                .permute(1, 0, 2, 3)
+                .repeat(1, 1, self._size, self._size)
+            )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+
+        B, C, H, W = x.shape
+
+        mask = F.interpolate(
+            self.mask,
+            size=(H, W),
+            mode="bilinear",
+            align_corners=False,
+        )
+        mask = mask.repeat(B, 1, 1, 1)
+
+        mask_background = F.interpolate(
+            self.mask_background,
+            size=(H, W),
+            mode="bilinear",
+            align_corners=False,
+        )
+
+        mask_background = mask_background.repeat(B, 1, 1, 1)
+
+        if self._randomize_mask:
+            random_color = torch.rand(B, 3, 1, 1)
+            mask_background *= random_color
+
+        mask = mask.to(x.device)
+        mask_background = mask_background.to(x.device)
+        x = x * mask + mask_background * (1 - mask)
+        return x
+
+
 class MasqueradeRandom(torch.nn.Module):
     def __init__(
         self,

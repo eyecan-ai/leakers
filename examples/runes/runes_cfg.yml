@@ -1,0 +1,71 @@
+coder:
+  params:
+    act_last: torch.nn.Sigmoid
+    act_latent: null
+    act_middle: torch.nn.ReLU
+    bn: false
+    cin: 32
+    code_size: '@int(code_size)'
+    image_shape:
+    - '@int(channels)'
+    - '@int(image_size)'
+    - '@int(image_size)'
+    k: 3
+    n_layers: 4
+  type: elastic
+dataset:
+  params:
+    bit_size: '@int(code_size)'
+  type: binary
+losses:
+  code_loss: torch.nn.SmoothL1Loss
+  code_loss_weight: 1.0
+  rot_loss_weight: 0.0
+optimizer:
+  lr: 0.0001
+  lambda_lr: 0.999
+randomizer:
+
+  params:
+
+    # hue / sat / val
+    color_jitter: true
+    color_jitter_hue: 0.1
+    color_jitter_saturation: 0.1
+    color_jitter_brightness: 0.95
+    color_jitter_contrast: 0.95
+    color_jitter_p: 0.7
+
+    # Gaussian noise
+    gaussian_noise: false
+    gaussian_noise_mean: 0.0
+    gaussian_noise_std: 0.1
+    gaussian_noise_p: 0.3
+
+    # Random erasing boxes  
+    random_erasing: true
+    random_erasing_p: 0.3
+
+    # Affine transform
+    random_affine_rotation: 180
+    random_affine_translate: [0.1, 0.1]
+    random_affine_scale: [0.8, 1.2]
+    random_affine_p: 0.3
+
+    # Warper
+    warper: true
+    warper_distance_range: [0.3, 3]
+    warper_azimuth_range: [0, 360]
+    warper_zenith_range: [0, 85]
+
+    image_shape:
+    - '@int(channels)'
+    - '@int(image_size)'
+    - '@int(image_size)'
+  type: virtual
+training:
+  randomizer_warmup_epochs: 0
+masquerade:
+  # image_filename: /home/daniele/Desktop/experiments/2022-08-03.RunesBoard/images/masks/eyecan_filled_mask.png
+  image_filename: /home/daniele/Desktop/experiments/2022-08-03.RunesBoard/images/masks/cool_masks.001.png
+  mask_background: [255,255,255]

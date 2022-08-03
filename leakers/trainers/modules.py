@@ -3,7 +3,13 @@ import numpy as np
 from leakers.datasets.factory import AlphabetDatasetFactory
 from leakers.nn.modules.base import LeakerModule
 from leakers.nn.modules.factory import LeakerModuleFactory, RandomizersFactory
-from leakers.trainers.utils import ImageLogger, Masquerade, PipelineUtils, TensorUtils
+from leakers.trainers.utils import (
+    ImageLogger,
+    Masquerade,
+    MasqueradeByImage,
+    PipelineUtils,
+    TensorUtils,
+)
 import torch
 import pytorch_lightning as pl
 import torch.nn.functional as F
@@ -180,7 +186,11 @@ class RuneTrainingModule(pl.LightningModule, ImageLogger):
         self.code_loss = eval(self.hparams.losses["code_loss"])()
 
         # mask
-        self.masquerade = Masquerade()
+        # self.masquerade = Masquerade()
+        self.masquerade = MasqueradeByImage(
+            image_filename=self.hparams.masquerade["image_filename"],
+            mask_background=self.hparams.masquerade["mask_background"],
+        )
 
     def forward(self, x):
         return self.model(x)
@@ -276,5 +286,23 @@ class RuneTrainingModule(pl.LightningModule, ImageLogger):
         code_accuracy = code_corrects / code_total
         self.log("val/accuracy/code", code_accuracy)
 
+    # def configure_optimizers(self):
+    #     return torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer["lr"])
+
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer["lr"])
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.optimizer["lr"])
+        if self.hparams.optimizer["lambda_lr"] > 0:
+            scheduler = torch.optim.lr_scheduler.LambdaLR(
+                optimizer=optimizer,
+                lr_lambda=lambda epoch: self.hparams.optimizer["lambda_lr"] ** epoch,
+                verbose=True,
+            )
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "epoch",
+                },
+            }
+        else:
+            return optimizer

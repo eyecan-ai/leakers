@@ -4,6 +4,7 @@ import numpy as np
 from torch.nn.modules.linear import Identity
 from einops.layers.torch import Rearrange
 from leakers.nn.modules.base import LeakerModule
+import torchvision
 
 
 def elastic_initialize_weights(m):
@@ -39,14 +40,14 @@ class ElasticEncoder(torch.nn.Module):
         self._input_channels = self._input_shape[0]
 
         # Computes final features map shape
-        fh, fw = (self._input_shape[1:3] / (2**n_layers)).astype(np.int32)
+        fh, fw = (self._input_shape[1:3] / (2 ** n_layers)).astype(np.int32)
         assert np.all(np.array([fh, fw]) >= 2), "Number of layers to big."
 
         # Creates a Sequential modules list
         layers = []
 
         # number of per-layer-filters
-        filters = [self._input_channels] + [cin * (2**i) for i in range(n_layers)]
+        filters = [self._input_channels] + [cin * (2 ** i) for i in range(n_layers)]
         for i in range(n_layers):
             layers.append(
                 self._build_basic_block(
@@ -113,7 +114,7 @@ class ElasticDecoder(torch.nn.Module):
         self._output_shape = np.array(output_shape)
         self._output_channels = output_shape[0]
 
-        fh, fw = (self._output_shape[1:3] / (2**n_layers)).astype(np.int32)
+        fh, fw = (self._output_shape[1:3] / (2 ** n_layers)).astype(np.int32)
         assert np.all(np.array([fh, fw]) >= 2), "number of layers to big."
 
         # Creates a Sequential modules list
@@ -126,7 +127,7 @@ class ElasticDecoder(torch.nn.Module):
         layers.append(torch.nn.Linear(latent_size, initial_size))
         layers.append(Rearrange("b (c h w) -> b c h w", c=cout, h=fh, w=fw))
 
-        filters = [cout // (2**i) for i in range(n_layers + 1)] + [
+        filters = [cout // (2 ** i) for i in range(n_layers + 1)] + [
             self._output_channels
         ]
 
@@ -236,6 +237,81 @@ class ElasticCoder(LeakerModule):
             act_middle=act_middle,
             act_last=act_latent,
             bn=bn,
+        )
+
+        self.decoder = ElasticDecoder(
+            output_shape=image_shape,
+            latent_size=code_size,
+            n_layers=n_layers,
+            cin=cin,
+            act_middle=act_middle,
+            act_last=act_last,
+            bn=bn,
+        )
+
+    def code_size(self) -> int:
+        return self._code_size
+
+    def image_shape(self) -> Tuple[int, int, int]:
+        return self._image_shape
+
+    def generate(
+        self, code: torch.Tensor, angle_classes: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        image = self.decoder(code)
+        image_rot = self._rotate(image, k=angle_classes)
+        return image_rot
+
+    def encode(self, images: torch.Tensor) -> Dict[str, torch.Tensor]:
+        z = self.encoder(images)
+        code = z[:, : self._code_size]
+        scores = torch.abs(code)
+        rot_logits = z[:, self._code_size : self._code_size + 4]
+        rot_classes = torch.argmax(rot_logits, dim=1)
+        return {
+            "code": code,
+            "scores": scores,
+            "rot_logits": rot_logits,
+            "rot_classes": rot_classes,
+        }
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        gen = self.generate(x)
+        code = self.encode(gen)["code"]
+        return code
+
+
+class ElasticBackbonedCoder(LeakerModule):
+    def __init__(
+        self,
+        image_shape: Tuple[int, int, int],
+        code_size: int = 32,
+        cin: int = 32,
+        n_layers: int = 4,
+        k: int = 3,
+        bn: bool = False,
+        act_middle: str = "torch.nn.ReLU",
+        act_latent: str = None,  # "torch.nn.Sigmoid",
+        act_last: str = "torch.nn.Sigmoid",
+        backbone: str = "resnet18",
+        backbone_pretrained: bool = True,
+    ) -> None:
+        super().__init__()
+
+        self._code_size = code_size
+        self._image_shape = image_shape
+
+        backbone = torchvision.models.resnet18(pretrained=backbone_pretrained)
+        for param in backbone.parameters():
+            param.requires_grad = False
+
+        backbone.fc = torch.nn.Linear(512, code_size + 4)
+        for param in backbone.fc.parameters():
+            param.requires_grad = True
+
+        self.encoder = torch.nn.Sequential(
+            backbone,
+            eval(act_latent)() if act_latent is not None else torch.nn.Identity(),
         )
 
         self.decoder = ElasticDecoder(

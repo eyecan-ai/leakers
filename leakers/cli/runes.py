@@ -56,9 +56,8 @@ def generate(
     )
     configuration.check_available_placeholders(close_app=True)
     hparams = configuration.to_dict()
-    rich.print(hparams)
 
-    batch_size = 2 ** code_size
+    batch_size = min(2 ** code_size, 1024)
 
     module = RuneTrainingModule(**hparams)
 
@@ -79,6 +78,7 @@ def generate(
         log_every_n_steps=10,
         default_root_dir=output_folder,
         check_val_every_n_epoch=1,
+        # val_check_interval=0.1
         # resume_from_checkpoint=checkpoint if len(checkpoint) > 0 else None,
     )
 
@@ -95,81 +95,94 @@ def debug():
     pass
 
 
-@debug.command("mosaic", help="Debug Leakers in a Mosaic fashon")
-@click.option("-m", "--model", required=True, help="Leakers Model File.")
-@click.option("-r", "--display_rows", default=2, help="leakers mosaic rows")
-@click.option("-o", "--output_file", default="", help="output file")
+@debug.command("image", help="Load a runes image for interactive debug")
+@click.option("-m", "--model", required=True, help="Runes Model File.")
+@click.option("-i", "--input_image", default="", help="Leakers Model File.")
+@click.option("-w", "--width", default=12, help="Runes Board width.")
+@click.option("-h", "--height", default=8, help="Runes Board height.")
 @click.option("--cuda/--cpu", default=False, help="Cuda or CPU")
-def mosaic(
+def image(
     model: str,
-    display_rows: int,
-    output_file: str,
+    input_image: str,
+    width: int,
+    height: int,
     cuda: bool,
 ):
-    debug_show = len(output_file) == 0
 
     import cv2
-    import cv2
     from leakers.detectors.factory import RunesDetectorsFactory
+    from leakers.boards.simple import RibbonImagesPoolBoard
     import rich
     import numpy as np
     from einops import rearrange
     import itertools
+    import imageio
 
     device = "cuda" if cuda else "cpu"
     detector = RunesDetectorsFactory.create_from_checkpoint(
         filename=model, device=device
     )
-    leakers = detector.generate_leakers(
-        border=0,
-        padding=0,
-        output_size=256,
-    )
 
-    leakers_images = [leaker["image"] for leaker in leakers]
-    # squares = [np.zeros_like(leakers_images[0])] * len(leakers_images)
-    squares = []
-    for idx in range(len(leakers_images)):
-        square = np.zeros_like(leakers_images[0])
-        square = cv2.putText(
-            square,
-            f"ID[{idx}] ->",
-            (20, 128),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            2,
-            (1.0, 1.0, 1.0),
-            2,
-            cv2.LINE_AA,
+    if len(input_image) > 0:
+        image = imageio.imread(input_image)[:, :, :3]
+    else:
+        rich.print(f"Generating board {width}x{height}")
+        leakers = detector.generate_leakers(
+            border=0,
+            padding=0,
+            output_size=256,
+            batch_size=16,
         )
-        squares.append(square)
+        leakers_images = [leaker["image"] for leaker in leakers]
 
-    images = list(itertools.chain.from_iterable(zip(squares, leakers_images)))
+        board = RibbonImagesPoolBoard(
+            width=width,
+            height=height,
+            images=leakers_images,
+        )
+        image = board.generate()
 
-    board_image = rearrange(
-        images,
-        "(bH bW) h w c -> (bH h) (bW w) c",
-        bH=display_rows,
-    )
-    board_image = (board_image * 255).astype(np.uint8)
+    crop_size = 256
 
-    def cv_extract_roi_given_point(image, center, size):
-        x, y = center
-        image = cv2.copyMakeBorder(image, size, size, size, size, cv2.BORDER_CONSTANT)
-        x += size
-        y += size
-        crop = image[y - size // 2 : y + size // 2, x - size // 2 : x + size // 2]
-
-        return crop
+    click_points = []
 
     def cv_mouse_callback(event, x, y, flags, param):
-        if event == cv2.EVENT_MOUSEMOVE:
-            crop = cv_extract_roi_given_point(
-                image=board_image, center=(x, y), size=256
+        if event == cv2.EVENT_LBUTTONDOWN:
+            point = (x, y)
+
+            if len(click_points) == 4:
+                click_points.clear()
+            else:
+                click_points.append(point)
+
+    cv2.namedWindow(f"debug", cv2.WINDOW_GUI_NORMAL)
+    cv2.setMouseCallback(f"debug", cv_mouse_callback)
+    while True:
+
+        output_image = image.copy()
+
+        for click_point in click_points:
+            output_image = cv2.circle(output_image, click_point, 5, (0, 0, 255), -1)
+
+        if len(click_points) == 4:
+            size = detector.model.image_shape()[-1]
+            points = np.array(click_points).reshape((4, 2)).astype(np.float32)
+            dst = np.array(
+                [[0, 0], [size - 1, 0], [size - 1, size - 1], [0, size - 1]],
+                dtype="float32",
             )
+            M = cv2.getPerspectiveTransform(points, dst)
+            M2 = cv2.getPerspectiveTransform(dst, points)
+            warp = cv2.warpPerspective(image, M, (size, size))
+            padding = 3
+            warp = warp[padding:-padding, padding:-padding]
+
+            crop = cv2.resize(warp, (size, size), interpolation=cv2.INTER_CUBIC)
 
             detections = detector.detect_single_leaker(crop)
             code = detections["code"]
 
+            crop = cv2.resize(crop, (256, 256))
             crop = cv2.putText(
                 crop,
                 f"ID: {code}",
@@ -180,14 +193,61 @@ def mosaic(
                 2,
             )
             rich.print(detections)
+
             cv2.imshow("crop", cv2.cvtColor(crop, cv2.COLOR_RGB2BGR))
 
-    cv2.namedWindow(f"debug", cv2.WINDOW_GUI_NORMAL)
-    cv2.setMouseCallback(f"debug", cv_mouse_callback)
-    while True:
-
         # if debug_show:
-        cv2.imshow(f"debug", cv2.cvtColor(board_image, cv2.COLOR_RGB2BGR))
+        cv2.imshow(f"debug", cv2.cvtColor(output_image, cv2.COLOR_RGB2BGR))
         k = cv2.waitKey(1)
         if k == ord("q"):
             break
+        if k == ord("d"):
+            crop_size += 1
+        if k == ord("a"):
+            crop_size -= 1
+
+
+@debug.command("print_board", help="Print runes board")
+@click.option("-m", "--model", required=True, help="Leakers Model File.")
+@click.option("-o", "--output_file", default="", help="output file")
+@click.option("-w", "--width", default=12, help="board width")
+@click.option("-h", "--height", default=8, help="board height")
+@click.option("--cuda/--cpu", default=False, help="Cuda or CPU")
+def print_board(
+    model: str,
+    output_file: str,
+    width: int,
+    height: int,
+    cuda: bool,
+):
+
+    import cv2
+    from leakers.detectors.factory import RunesDetectorsFactory
+    from leakers.boards.simple import RibbonImagesPoolBoard
+    import rich
+
+    device = "cuda" if cuda else "cpu"
+    detector = RunesDetectorsFactory.create_from_checkpoint(
+        filename=model, device=device
+    )
+    leakers = detector.generate_leakers(
+        border=0,
+        padding=0,
+        output_size=256,
+        batch_size=256,
+    )
+    leakers_images = [leaker["image"] for leaker in leakers]
+
+    board = RibbonImagesPoolBoard(
+        width=width,
+        height=height,
+        images=leakers_images,
+    )
+    board_image = board.generate()
+
+    cv2.imshow("board", cv2.cvtColor(board_image, cv2.COLOR_RGB2BGR))
+    cv2.waitKey(0)
+
+    if len(output_file) > 0:
+        cv2.imwrite(output_file, cv2.cvtColor(board_image, cv2.COLOR_RGB2BGR))
+        rich.print("Board saved to:", output_file)
